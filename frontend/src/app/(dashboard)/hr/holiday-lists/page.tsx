@@ -1,108 +1,164 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { normalizePaginated } from '@/lib/api-helpers';
-import { PageHeader } from '@/components/shared/page-header';
-import { DataTable } from '@/components/shared/data-table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format } from 'date-fns';
-import { Calendar } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
+import { Plus } from 'lucide-react'
+import api from '@/lib/api'
+import { normalizePaginated } from '@/lib/api-helpers'
+import { PageHeader } from '@/components/shared/page-header'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
 
 interface Holiday {
-  id: string;
-  name: string;
-  date: string;
-  type: string;
-  description: string;
-  applicable_to: string;
+  id: string
+  name: string
+  date: string
+  type: string
+  description: string
+  applicable_to: string
+}
+
+const HOLIDAY_TYPE_COLORS: Record<string, string> = {
+  national: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  optional: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  company: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
 }
 
 export default function HolidayListsPage() {
-  const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 50, total: 0 });
-  const [search, setSearch] = useState('');
-  const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [holidays, setHolidays] = useState<Holiday[]>([])
+  const [loading, setLoading] = useState(true)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    per_page: 25,
+    total: 0,
+    pages: 1,
+  })
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
+  const search = searchParams.get('search') ?? ''
+  const type = searchParams.get('type') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
+
+  const fetchHolidays = useCallback(async () => {
+    setLoading(true)
     try {
       const { data: raw } = await api.get('/hr/holiday-lists', {
-        params: { page: pagination.page, page_size: pagination.pageSize, search, year: yearFilter },
-      });
-      const normalized = normalizePaginated<Holiday>(raw);
-      setHolidays(normalized.items);
-      setPagination((p) => ({ ...p, total: normalized.total }));
+        params: {
+          page,
+          per_page: perPage,
+          ...(search && { search }),
+          ...(type && { type }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
+        },
+      })
+      const normalized = normalizePaginated<Holiday>(raw)
+      setHolidays(normalized.items)
+      setPagination({
+        page: normalized.page,
+        per_page: normalized.per_page,
+        total: normalized.total,
+        pages: normalized.pages,
+      })
     } catch {
-      toast.error('Failed to load holidays');
+      toast.error('Failed to load holidays')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [pagination.page, pagination.pageSize, search, yearFilter]);
+  }, [page, perPage, search, type, sortBy, sortDirection])
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchHolidays()
+  }, [fetchHolidays])
 
-  const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 5 }, (_, i) => String(currentYear - 2 + i));
-
-  const HOLIDAY_TYPE_COLORS: Record<string, string> = {
-    national: 'bg-blue-100 text-blue-700',
-    optional: 'bg-amber-100 text-amber-700',
-    company: 'bg-purple-100 text-purple-700',
-  };
-
-  const columns = [
+  const columns: ServerColumnDef<Holiday>[] = [
     {
-      key: 'date',
-      label: 'Date',
-      render: (h: Holiday) => (
-        <div className="flex items-center gap-2">
-          <Calendar className="size-4 text-muted-foreground" />
-          <div>
-            <div className="font-medium text-sm">{format(new Date(h.date), 'MMMM d, yyyy')}</div>
-            <div className="text-xs text-muted-foreground">{format(new Date(h.date), 'EEEE')}</div>
-          </div>
-        </div>
-      ),
-    },
-    { key: 'name', label: 'Holiday' },
-    {
-      key: 'type',
-      label: 'Type',
-      render: (h: Holiday) => (
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${HOLIDAY_TYPE_COLORS[h.type] ?? 'bg-gray-100 text-gray-700'}`}>
-          {h.type}
+      id: 'date',
+      header: 'Date',
+      cell: (row) => (
+        <span>
+          {new Date(row.date).toLocaleDateString(undefined, {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
         </span>
       ),
     },
-    { key: 'applicable_to', label: 'Applicable To', render: (h: Holiday) => h.applicable_to ?? 'All' },
-    { key: 'description', label: 'Description', render: (h: Holiday) => <span className="text-muted-foreground text-xs">{h.description ?? '—'}</span> },
-  ];
+    {
+      id: 'name',
+      header: 'Name',
+      cell: (row) => <span className="font-medium">{row.name}</span>,
+    },
+    {
+      id: 'type',
+      header: 'Type',
+      cell: (row) => (
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+            HOLIDAY_TYPE_COLORS[row.type] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+          }`}
+        >
+          {row.type}
+        </span>
+      ),
+      meta: {
+        filterType: 'select',
+        filterKey: 'type',
+        filterPlaceholder: 'All Types',
+        filterOptions: [
+          { value: 'national', label: 'National' },
+          { value: 'optional', label: 'Optional' },
+          { value: 'company', label: 'Company' },
+        ],
+      },
+    },
+    {
+      id: 'applicable_to',
+      header: 'Applicable To',
+      cell: (row) =>
+        row.applicable_to || <span className="text-muted-foreground">All</span>,
+    },
+    {
+      id: 'description',
+      header: 'Description',
+      enableSorting: false,
+      cell: (row) => (
+        <span className="text-muted-foreground truncate max-w-[250px] inline-block">
+          {row.description || '—'}
+        </span>
+      ),
+    },
+  ]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Holiday Lists"
         breadcrumbs={[{ label: 'HR' }, { label: 'Holiday Lists' }]}
         createHref="/hr/holiday-lists/new"
+        createLabel="New Holiday"
+        createIcon={Plus}
       />
-      <div className="flex gap-3">
-        <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v); setPagination((p) => ({ ...p, page: 1 })); }}>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {yearOptions.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      <DataTable
+      <AdvancedDataTable
+        title="Holiday Lists"
         columns={columns}
         data={holidays}
+        pagination={pagination}
         loading={loading}
-        pagination={{ ...pagination, onPageChange: (p) => setPagination((prev) => ({ ...prev, page: p })) }}
-        onSearch={(q) => { setSearch(q); setPagination((p) => ({ ...p, page: 1 })); }}
+        emptyMessage="No holidays found"
+        emptyDescription="Add your first holiday to get started."
+        searchPlaceholder="Search holidays..."
+        storageKey="hr-holiday-lists"
       />
     </div>
-  );
+  )
 }

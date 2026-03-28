@@ -65,6 +65,8 @@ async def list_leads(
     search: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     assigned_to: Optional[int] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_direction: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
@@ -85,6 +87,8 @@ async def list_leads(
         search=search,
         search_fields=["first_name", "last_name", "email", "company", "title"],
         filters=filters,
+        order_by=sort_by,
+        sort_direction=sort_direction or "desc",
     )
     return _list_response(items, total, page, per_page)
 

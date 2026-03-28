@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 import api from '@/lib/api'
 import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
-import { DataTable, type ColumnDef } from '@/components/shared/data-table'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
 import { StatusBadge } from '@/components/shared/status-badge'
-import { FilterBar } from '@/components/shared/filter-bar'
 
 interface Customer {
   id: string
@@ -22,14 +24,6 @@ interface Customer {
   credit_limit: number
   currency: string
   created_at: string
-}
-
-interface PaginatedResponse {
-  items: Customer[]
-  count: number
-  page: number
-  per_page: number
-  pages: number
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -50,6 +44,7 @@ function TypeBadge({ type }: { type: string }) {
 }
 
 export default function CustomersPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -57,13 +52,16 @@ export default function CustomersPage() {
     page: 1,
     per_page: 25,
     total: 0,
-    total_pages: 1,
+    pages: 1,
   })
 
   const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
   const search = searchParams.get('search') ?? ''
   const status = searchParams.get('status') ?? ''
   const type = searchParams.get('type') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -71,10 +69,12 @@ export default function CustomersPage() {
       const { data: raw } = await api.get('/crm/customers', {
         params: {
           page,
-          per_page: 25,
+          per_page: perPage,
           ...(search && { search }),
           ...(status && { status }),
           ...(type && { type }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
         },
       })
       const normalized = normalizePaginated<Customer>(raw)
@@ -83,49 +83,59 @@ export default function CustomersPage() {
         page: normalized.page,
         per_page: normalized.per_page,
         total: normalized.total,
-        total_pages: normalized.pages,
+        pages: normalized.pages,
       })
     } catch {
       toast.error('Failed to load customers')
     } finally {
       setLoading(false)
     }
-  }, [page, search, status, type])
+  }, [page, perPage, search, status, type, sortBy, sortDirection])
 
   useEffect(() => {
     fetchCustomers()
   }, [fetchCustomers])
 
-  const columns: ColumnDef<Customer>[] = [
+  const columns: ServerColumnDef<Customer>[] = [
     {
-      key: 'code',
+      id: 'code',
       header: 'Code',
       cell: (row) => (
         <span className="font-mono text-xs text-muted-foreground">{row.code}</span>
       ),
     },
     {
-      key: 'name',
+      id: 'name',
       header: 'Name',
       cell: (row) => <span className="font-medium">{row.name}</span>,
     },
     {
-      key: 'type',
+      id: 'type',
       header: 'Type',
       cell: (row) => <TypeBadge type={row.type} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'type',
+        filterPlaceholder: 'All Types',
+        filterOptions: [
+          { value: 'individual', label: 'Individual' },
+          { value: 'company', label: 'Company' },
+          { value: 'government', label: 'Government' },
+        ],
+      },
     },
     {
-      key: 'email',
+      id: 'email',
       header: 'Email',
       cell: (row) => row.email || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'phone',
+      id: 'phone',
       header: 'Phone',
       cell: (row) => row.phone || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'credit_limit',
+      id: 'credit_limit',
       header: 'Credit Limit',
       cell: (row) =>
         row.credit_limit != null ? (
@@ -140,14 +150,24 @@ export default function CustomersPage() {
         ),
     },
     {
-      key: 'status',
+      id: 'status',
       header: 'Status',
       cell: (row) => <StatusBadge status={row.status} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'status',
+        filterPlaceholder: 'All Statuses',
+        filterOptions: [
+          { value: 'active', label: 'Active' },
+          { value: 'inactive', label: 'Inactive' },
+          { value: 'archived', label: 'Archived' },
+        ],
+      },
     },
   ]
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Customers"
         breadcrumbs={[{ label: 'CRM' }, { label: 'Customers' }]}
@@ -155,30 +175,8 @@ export default function CustomersPage() {
         createLabel="New Customer"
         createIcon={Plus}
       />
-      <FilterBar
-        searchPlaceholder="Search customers..."
-        filters={[
-          {
-            key: 'type',
-            placeholder: 'All Types',
-            options: [
-              { value: 'individual', label: 'Individual' },
-              { value: 'company', label: 'Company' },
-              { value: 'government', label: 'Government' },
-            ],
-          },
-          {
-            key: 'status',
-            placeholder: 'All Statuses',
-            options: [
-              { value: 'active', label: 'Active' },
-              { value: 'inactive', label: 'Inactive' },
-              { value: 'archived', label: 'Archived' },
-            ],
-          },
-        ]}
-      />
-      <DataTable
+      <AdvancedDataTable
+        title="Customers"
         columns={columns}
         data={customers}
         pagination={pagination}
@@ -188,6 +186,8 @@ export default function CustomersPage() {
         onDelete={fetchCustomers}
         emptyMessage="No customers found"
         emptyDescription="Create your first customer to get started."
+        searchPlaceholder="Search customers..."
+        storageKey="crm-customers"
       />
     </div>
   )

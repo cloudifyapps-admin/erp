@@ -79,7 +79,7 @@ export function FilterBar({ searchPlaceholder = 'Search...', filters = [] }: Fil
           placeholder={searchPlaceholder}
           defaultValue={searchParams.get('search') ?? ''}
           onChange={(e) => handleSearch(e.target.value)}
-          className="pl-8 h-8"
+          className="pl-8 h-9 text-[0.8rem]"
         />
       </div>
       {filters.map((filter) => (

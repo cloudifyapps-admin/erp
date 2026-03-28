@@ -51,6 +51,7 @@ class CRUDService:
         search_fields: Optional[list[str]] = None,
         filters: Optional[dict] = None,
         order_by: Optional[str] = None,
+        sort_direction: str = "desc",
     ) -> tuple[list[ModelType], int]:
         query = select(self.model).where(self.model.tenant_id == tenant_id)
         count_query = select(func.count()).select_from(self.model).where(self.model.tenant_id == tenant_id)
@@ -74,7 +75,8 @@ class CRUDService:
 
         # Order
         if order_by and hasattr(self.model, order_by):
-            query = query.order_by(getattr(self.model, order_by).desc())
+            col = getattr(self.model, order_by)
+            query = query.order_by(col.asc() if sort_direction == "asc" else col.desc())
         elif hasattr(self.model, "created_at"):
             query = query.order_by(self.model.created_at.desc())
 

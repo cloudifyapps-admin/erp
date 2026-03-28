@@ -29,6 +29,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DeleteDialog } from './delete-dialog'
+import { cn } from '@/lib/utils'
 import api from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -120,12 +121,12 @@ export function DataTable<T extends { id: string | number }>({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow className="hover:bg-transparent">
+            <TableRow className="hover:bg-transparent bg-muted/30">
               {columns.map((col) => (
-                <TableHead key={col.key} className={col.className}>
+                <TableHead key={col.key} className={cn('text-[0.75rem] font-semibold text-muted-foreground uppercase tracking-wide', col.className)}>
                   {col.header}
                 </TableHead>
               ))}
@@ -143,9 +144,9 @@ export function DataTable<T extends { id: string | number }>({
                   colSpan={columns.length + 1}
                   className="h-32 text-center"
                 >
-                  <div className="flex flex-col items-center gap-1">
-                    <p className="text-sm font-medium">{emptyMessage}</p>
-                    <p className="text-xs text-muted-foreground">{emptyDescription}</p>
+                  <div className="flex flex-col items-center gap-1.5">
+                    <p className="text-[0.85rem] font-semibold text-foreground">{emptyMessage}</p>
+                    <p className="text-[0.75rem] text-muted-foreground">{emptyDescription}</p>
                   </div>
                 </TableCell>
               </TableRow>
@@ -203,7 +204,7 @@ export function DataTable<T extends { id: string | number }>({
 
       {pagination && pagination.total_pages > 1 && (
         <div className="flex items-center justify-between px-1">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[0.75rem] font-medium text-muted-foreground">
             Showing {(currentPage - 1) * pagination.per_page + 1}–
             {Math.min(currentPage * pagination.per_page, pagination.total)} of{' '}
             {pagination.total} records
@@ -217,7 +218,7 @@ export function DataTable<T extends { id: string | number }>({
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs px-2">
+            <span className="text-[0.75rem] font-medium px-2 tabular-nums text-foreground">
               {currentPage} / {totalPages}
             </span>
             <Button

@@ -85,22 +85,22 @@ interface StatCardProps {
 function StatCard({ label, value, icon: Icon, href, color }: StatCardProps) {
   return (
     <Link href={href}>
-      <Card className="cursor-pointer transition-shadow hover:shadow-md">
-        <CardContent className="flex items-center gap-4 py-4">
-          <div className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${color}`}>
+      <Card className="cursor-pointer transition-all hover:shadow-md hover:border-border/80 group">
+        <CardContent className="flex items-center gap-4 py-5 px-5">
+          <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${color}`}>
             <Icon className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-2xl font-bold leading-tight tabular-nums">
+            <p className="text-[1.5rem] font-bold leading-tight tabular-nums text-foreground">
               {value === undefined ? (
                 <span className="inline-block h-7 w-10 animate-pulse rounded bg-muted" />
               ) : (
                 value.toLocaleString()
               )}
             </p>
-            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-[0.8rem] font-medium text-muted-foreground mt-0.5">{label}</p>
           </div>
-          <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+          <ArrowRight className="size-4 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
         </CardContent>
       </Card>
     </Link>
@@ -222,11 +222,11 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
+      <div className="flex flex-col gap-1 mb-2">
+        <h1 className="text-[1.65rem] font-bold tracking-tight text-foreground leading-tight">
           {firstName ? `Welcome back, ${firstName}` : 'Dashboard'}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[13px] font-medium text-muted-foreground">
           {new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())}
         </p>
       </div>
@@ -266,18 +266,18 @@ export default function DashboardPage() {
             ) : !leads?.length ? (
               <p className="py-8 text-center text-sm text-muted-foreground">No leads yet.</p>
             ) : (
-              <div className="divide-y">
+              <div className="divide-y divide-border/60">
                 {leads.map((lead) => (
-                  <div key={lead.id} className="flex items-center justify-between gap-3 py-3">
+                  <div key={lead.id} className="flex items-center justify-between gap-3 py-3.5">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{lead.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">{lead.contact_name}</p>
+                      <p className="truncate text-[0.8rem] font-semibold text-foreground">{lead.title}</p>
+                      <p className="truncate text-[0.75rem] text-muted-foreground mt-0.5">{lead.contact_name}</p>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <Badge variant={leadStatusVariant(lead.status)} className="capitalize text-xs">
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <Badge variant={leadStatusVariant(lead.status)} className="capitalize text-[0.68rem]">
                         {lead.status}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">{formatDate(lead.created_at)}</span>
+                      <span className="text-[0.7rem] text-muted-foreground">{formatDate(lead.created_at)}</span>
                     </div>
                   </div>
                 ))}
@@ -312,18 +312,18 @@ export default function DashboardPage() {
             ) : !orders?.length ? (
               <p className="py-8 text-center text-sm text-muted-foreground">No orders yet.</p>
             ) : (
-              <div className="divide-y">
+              <div className="divide-y divide-border/60">
                 {orders.map((order) => (
-                  <div key={order.id} className="flex items-center justify-between gap-3 py-3">
+                  <div key={order.id} className="flex items-center justify-between gap-3 py-3.5">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{order.order_number}</p>
-                      <p className="truncate text-xs text-muted-foreground">{order.customer_name}</p>
+                      <p className="truncate text-[0.8rem] font-semibold text-foreground">{order.order_number}</p>
+                      <p className="truncate text-[0.75rem] text-muted-foreground mt-0.5">{order.customer_name}</p>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <Badge variant={orderStatusVariant(order.status)} className="capitalize text-xs">
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <Badge variant={orderStatusVariant(order.status)} className="capitalize text-[0.68rem]">
                         {order.status}
                       </Badge>
-                      <span className="text-xs font-medium tabular-nums">{formatCurrency(order.total)}</span>
+                      <span className="text-[0.75rem] font-semibold tabular-nums text-foreground">{formatCurrency(order.total)}</span>
                     </div>
                   </div>
                 ))}

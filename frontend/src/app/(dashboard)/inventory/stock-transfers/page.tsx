@@ -1,104 +1,162 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { normalizePaginated } from '@/lib/api-helpers';
-import { PageHeader } from '@/components/shared/page-header';
-import { DataTable } from '@/components/shared/data-table';
-import { StatusBadge } from '@/components/shared/status-badge';
-import { format } from 'date-fns';
-import { ArrowRight } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
+import { Plus, ArrowRight } from 'lucide-react'
+import api from '@/lib/api'
+import { normalizePaginated } from '@/lib/api-helpers'
+import { PageHeader } from '@/components/shared/page-header'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
+import { StatusBadge } from '@/components/shared/status-badge'
 
 interface StockTransfer {
-  id: string;
-  reference: string;
-  source_warehouse: string;
-  destination_warehouse: string;
-  total_items: number;
-  transferred_by: string;
-  transfer_date: string;
-  status: string;
-  notes: string;
+  id: string
+  reference: string
+  source_warehouse: string
+  destination_warehouse: string
+  total_items: number
+  transferred_by: string
+  transfer_date: string
+  status: string
+  notes: string
 }
 
 export default function StockTransfersPage() {
-  const [transfers, setTransfers] = useState<StockTransfer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [transfers, setTransfers] = useState<StockTransfer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    per_page: 25,
+    total: 0,
+    pages: 1,
+  })
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
+  const search = searchParams.get('search') ?? ''
+  const status = searchParams.get('status') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
+
+  const fetchTransfers = useCallback(async () => {
+    setLoading(true)
     try {
       const { data: raw } = await api.get('/inventory/stock-transfers', {
-        params: { page: pagination.page, page_size: pagination.pageSize, search, status: statusFilter || undefined },
-      });
-      const normalized = normalizePaginated<StockTransfer>(raw);
-      setTransfers(normalized.items);
-      setPagination((p) => ({ ...p, total: normalized.total }));
+        params: {
+          page,
+          per_page: perPage,
+          ...(search && { search }),
+          ...(status && { status }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
+        },
+      })
+      const normalized = normalizePaginated<StockTransfer>(raw)
+      setTransfers(normalized.items)
+      setPagination({
+        page: normalized.page,
+        per_page: normalized.per_page,
+        total: normalized.total,
+        pages: normalized.pages,
+      })
     } catch {
-      toast.error('Failed to load stock transfers');
+      toast.error('Failed to load stock transfers')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [pagination.page, pagination.pageSize, search, statusFilter]);
+  }, [page, perPage, search, status, sortBy, sortDirection])
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchTransfers()
+  }, [fetchTransfers])
 
-  const columns = [
-    { key: 'reference', label: 'Reference' },
+  const columns: ServerColumnDef<StockTransfer>[] = [
     {
-      key: 'route',
-      label: 'Route',
-      render: (t: StockTransfer) => (
-        <span className="inline-flex items-center gap-1.5 text-sm">
-          <span>{t.source_warehouse}</span>
-          <ArrowRight className="size-3.5 text-muted-foreground" />
-          <span>{t.destination_warehouse}</span>
-        </span>
+      id: 'reference',
+      header: 'Reference',
+      cell: (row) => <span className="font-medium">{row.reference}</span>,
+    },
+    {
+      id: 'route',
+      header: 'Route',
+      enableSorting: false,
+      cell: (row) => (
+        <div className="flex items-center gap-2 text-sm">
+          <span>{row.source_warehouse}</span>
+          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+          <span>{row.destination_warehouse}</span>
+        </div>
       ),
     },
-    { key: 'total_items', label: 'Items', render: (t: StockTransfer) => t.total_items?.toLocaleString() ?? '—' },
-    { key: 'transferred_by', label: 'Transferred By' },
     {
-      key: 'transfer_date',
-      label: 'Date',
-      render: (t: StockTransfer) => t.transfer_date ? format(new Date(t.transfer_date), 'MMM d, yyyy') : '—',
+      id: 'total_items',
+      header: 'Items',
+      cell: (row) => (
+        <span className="tabular-nums">{row.total_items?.toLocaleString()}</span>
+      ),
     },
     {
-      key: 'status',
-      label: 'Status',
-      render: (t: StockTransfer) => <StatusBadge status={t.status} />,
+      id: 'transferred_by',
+      header: 'Transferred By',
+      enableSorting: false,
+      cell: (row) =>
+        row.transferred_by || <span className="text-muted-foreground">—</span>,
     },
-  ];
-
-  const filterOptions = [
-    { label: 'All Statuses', value: '' },
-    { label: 'Draft', value: 'draft' },
-    { label: 'In Transit', value: 'in_transit' },
-    { label: 'Received', value: 'received' },
-    { label: 'Cancelled', value: 'cancelled' },
-  ];
+    {
+      id: 'transfer_date',
+      header: 'Date',
+      cell: (row) =>
+        row.transfer_date
+          ? new Date(row.transfer_date).toLocaleDateString()
+          : <span className="text-muted-foreground">—</span>,
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (row) => <StatusBadge status={row.status} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'status',
+        filterPlaceholder: 'All Statuses',
+        filterOptions: [
+          { value: 'draft', label: 'Draft' },
+          { value: 'in_transit', label: 'In Transit' },
+          { value: 'received', label: 'Received' },
+          { value: 'cancelled', label: 'Cancelled' },
+        ],
+      },
+    },
+  ]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Stock Transfers"
         breadcrumbs={[{ label: 'Inventory' }, { label: 'Stock Transfers' }]}
         createHref="/inventory/stock-transfers/new"
+        createLabel="New Transfer"
+        createIcon={Plus}
       />
-      <DataTable
+      <AdvancedDataTable
+        title="Stock Transfers"
         columns={columns}
         data={transfers}
+        pagination={pagination}
         loading={loading}
-        pagination={{ ...pagination, onPageChange: (p) => setPagination((prev) => ({ ...prev, page: p })) }}
-        onSearch={(q) => { setSearch(q); setPagination((p) => ({ ...p, page: 1 })); }}
-        onFilter={(val) => { setStatusFilter(val); setPagination((p) => ({ ...p, page: 1 })); }}
-        filterOptions={filterOptions}
-        filterLabel="Status"
+        editBasePath="/inventory/stock-transfers"
+        deleteEndpoint="/inventory/stock-transfers"
+        onDelete={fetchTransfers}
+        emptyMessage="No stock transfers found"
+        emptyDescription="Create your first stock transfer to get started."
+        searchPlaceholder="Search transfers..."
+        storageKey="inventory-stock-transfers"
       />
     </div>
-  );
+  )
 }

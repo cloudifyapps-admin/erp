@@ -7,9 +7,11 @@ import { Plus } from 'lucide-react'
 import api from '@/lib/api'
 import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
-import { DataTable, type ColumnDef } from '@/components/shared/data-table'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
 import { StatusBadge } from '@/components/shared/status-badge'
-import { FilterBar } from '@/components/shared/filter-bar'
 
 interface Lead {
   id: string
@@ -25,14 +27,6 @@ interface Lead {
   created_at: string
 }
 
-interface PaginatedResponse {
-  items: Lead[]
-  total: number
-  page: number
-  per_page: number
-  pages: number
-}
-
 export default function LeadsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -42,12 +36,15 @@ export default function LeadsPage() {
     page: 1,
     per_page: 25,
     total: 0,
-    total_pages: 1,
+    pages: 1,
   })
 
   const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
   const search = searchParams.get('search') ?? ''
   const status = searchParams.get('status') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
 
   const fetchLeads = useCallback(async () => {
     setLoading(true)
@@ -55,9 +52,11 @@ export default function LeadsPage() {
       const { data: raw } = await api.get('/crm/leads', {
         params: {
           page,
-          per_page: 25,
+          per_page: perPage,
           ...(search && { search }),
           ...(status && { status }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
         },
       })
       const normalized = normalizePaginated<Lead>(raw)
@@ -66,43 +65,50 @@ export default function LeadsPage() {
         page: normalized.page,
         per_page: normalized.per_page,
         total: normalized.total,
-        total_pages: normalized.pages,
+        pages: normalized.pages,
       })
     } catch {
       toast.error('Failed to load leads')
     } finally {
       setLoading(false)
     }
-  }, [page, search, status])
+  }, [page, perPage, search, status, sortBy, sortDirection])
 
   useEffect(() => {
     fetchLeads()
   }, [fetchLeads])
 
-  const columns: ColumnDef<Lead>[] = [
+  const columns: ServerColumnDef<Lead>[] = [
     {
-      key: 'title',
+      id: 'title',
       header: 'Title',
       cell: (row) => (
-        <span className="font-medium">{row.title || `${row.first_name} ${row.last_name}`}</span>
+        <span className="font-medium">
+          {row.title || `${row.first_name} ${row.last_name}`}
+        </span>
       ),
     },
     {
-      key: 'company',
+      id: 'company',
       header: 'Company',
-      cell: (row) => row.company || <span className="text-muted-foreground">—</span>,
+      cell: (row) =>
+        row.company || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'email',
+      id: 'email',
       header: 'Email',
+      cell: (row) => (
+        <span className="text-muted-foreground">{row.email}</span>
+      ),
     },
     {
-      key: 'phone',
+      id: 'phone',
       header: 'Phone',
-      cell: (row) => row.phone || <span className="text-muted-foreground">—</span>,
+      cell: (row) =>
+        row.phone || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'source',
+      id: 'source',
       header: 'Source',
       cell: (row) =>
         row.source ? (
@@ -112,20 +118,35 @@ export default function LeadsPage() {
         ),
     },
     {
-      key: 'status',
+      id: 'status',
       header: 'Status',
       cell: (row) => <StatusBadge status={row.status} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'status',
+        filterPlaceholder: 'All Statuses',
+        filterOptions: [
+          { value: 'new', label: 'New' },
+          { value: 'qualified', label: 'Qualified' },
+          { value: 'converted', label: 'Converted' },
+          { value: 'lost', label: 'Lost' },
+          { value: 'rejected', label: 'Rejected' },
+        ],
+      },
     },
     {
-      key: 'assigned_to_name',
+      id: 'assigned_to_name',
       header: 'Assigned To',
+      enableSorting: false,
       cell: (row) =>
-        row.assigned_to_name || <span className="text-muted-foreground">—</span>,
+        row.assigned_to_name || (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
   ]
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Leads"
         breadcrumbs={[{ label: 'CRM' }, { label: 'Leads' }]}
@@ -133,23 +154,8 @@ export default function LeadsPage() {
         createLabel="New Lead"
         createIcon={Plus}
       />
-      <FilterBar
-        searchPlaceholder="Search leads..."
-        filters={[
-          {
-            key: 'status',
-            placeholder: 'All Statuses',
-            options: [
-              { value: 'new', label: 'New' },
-              { value: 'qualified', label: 'Qualified' },
-              { value: 'converted', label: 'Converted' },
-              { value: 'lost', label: 'Lost' },
-              { value: 'rejected', label: 'Rejected' },
-            ],
-          },
-        ]}
-      />
-      <DataTable
+      <AdvancedDataTable
+        title="Leads"
         columns={columns}
         data={leads}
         pagination={pagination}
@@ -159,6 +165,8 @@ export default function LeadsPage() {
         onDelete={fetchLeads}
         emptyMessage="No leads found"
         emptyDescription="Create your first lead to get started."
+        searchPlaceholder="Search leads..."
+        storageKey="crm-leads"
       />
     </div>
   )

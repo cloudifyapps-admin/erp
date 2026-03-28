@@ -1,135 +1,199 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { normalizePaginated } from '@/lib/api-helpers';
-import { PageHeader } from '@/components/shared/page-header';
-import { DataTable } from '@/components/shared/data-table';
-import { StatusBadge } from '@/components/shared/status-badge';
-import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
-import { FileText, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
+import { Plus, FileText, Loader2 } from 'lucide-react'
+import api from '@/lib/api'
+import { normalizePaginated } from '@/lib/api-helpers'
+import { PageHeader } from '@/components/shared/page-header'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
+import { StatusBadge } from '@/components/shared/status-badge'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 
 interface PayrollRun {
-  id: string;
-  period_label: string;
-  month: number;
-  year: number;
-  total_employees: number;
-  total_gross: number;
-  total_net: number;
-  currency: string;
-  status: string;
-  processed_by: string;
-  processed_at: string;
+  id: string
+  period_label: string
+  month: number
+  year: number
+  total_employees: number
+  total_gross: number
+  total_net: number
+  currency: string
+  status: string
+  processed_by: string
+  processed_at: string
 }
 
 export default function PayrollPage() {
-  const [runs, setRuns] = useState<PayrollRun[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [generatingSlips, setGeneratingSlips] = useState<string | null>(null);
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [runs, setRuns] = useState<PayrollRun[]>([])
+  const [loading, setLoading] = useState(true)
+  const [generatingSlips, setGeneratingSlips] = useState<string | null>(null)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    per_page: 25,
+    total: 0,
+    pages: 1,
+  })
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
+  const search = searchParams.get('search') ?? ''
+  const status = searchParams.get('status') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
+
+  const fetchRuns = useCallback(async () => {
+    setLoading(true)
     try {
       const { data: raw } = await api.get('/hr/payroll-runs', {
-        params: { page: pagination.page, page_size: pagination.pageSize, search, status: statusFilter || undefined },
-      });
-      const normalized = normalizePaginated<PayrollRun>(raw);
-      setRuns(normalized.items);
-      setPagination((p) => ({ ...p, total: normalized.total }));
+        params: {
+          page,
+          per_page: perPage,
+          ...(search && { search }),
+          ...(status && { status }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
+        },
+      })
+      const normalized = normalizePaginated<PayrollRun>(raw)
+      setRuns(normalized.items)
+      setPagination({
+        page: normalized.page,
+        per_page: normalized.per_page,
+        total: normalized.total,
+        pages: normalized.pages,
+      })
     } catch {
-      toast.error('Failed to load payroll runs');
+      toast.error('Failed to load payroll runs')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [pagination.page, pagination.pageSize, search, statusFilter]);
+  }, [page, perPage, search, status, sortBy, sortDirection])
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchRuns()
+  }, [fetchRuns])
 
-  const handleGenerateSlips = async (runId: string) => {
-    setGeneratingSlips(runId);
+  const handleGenerateSlips = async (id: string) => {
+    setGeneratingSlips(id)
     try {
-      await api.post(`/hr/payroll-runs/${runId}/generate-slips`);
-      toast.success('Payslips generated successfully');
+      await api.post(`/hr/payroll-runs/${id}/generate-slips`)
+      toast.success('Pay slips generated successfully')
+      fetchRuns()
     } catch {
-      toast.error('Failed to generate payslips');
+      toast.error('Failed to generate pay slips')
     } finally {
-      setGeneratingSlips(null);
+      setGeneratingSlips(null)
     }
-  };
+  }
 
-  const columns = [
-    { key: 'period_label', label: 'Period' },
-    { key: 'total_employees', label: 'Employees', render: (r: PayrollRun) => r.total_employees?.toLocaleString() ?? '—' },
+  const columns: ServerColumnDef<PayrollRun>[] = [
     {
-      key: 'total_gross',
-      label: 'Gross Total',
-      render: (r: PayrollRun) => (
-        <span className="tabular-nums">{r.currency} {Number(r.total_gross).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+      id: 'period_label',
+      header: 'Period',
+      cell: (row) => <span className="font-medium">{row.period_label}</span>,
+    },
+    {
+      id: 'total_employees',
+      header: 'Employees',
+      cell: (row) => (
+        <span className="tabular-nums">{row.total_employees?.toLocaleString()}</span>
       ),
     },
     {
-      key: 'total_net',
-      label: 'Net Total',
-      render: (r: PayrollRun) => (
-        <span className="tabular-nums font-semibold">{r.currency} {Number(r.total_net).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+      id: 'total_gross',
+      header: 'Gross Total',
+      cell: (row) => (
+        <span className="tabular-nums">
+          {row.currency ?? ''} {row.total_gross?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
       ),
     },
-    { key: 'processed_by', label: 'Processed By', render: (r: PayrollRun) => r.processed_by ?? '—' },
     {
-      key: 'processed_at',
-      label: 'Date',
-      render: (r: PayrollRun) => r.processed_at ? format(new Date(r.processed_at), 'MMM d, yyyy') : '—',
+      id: 'total_net',
+      header: 'Net Total',
+      cell: (row) => (
+        <span className="tabular-nums font-semibold">
+          {row.currency ?? ''} {row.total_net?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+      ),
     },
-    { key: 'status', label: 'Status', render: (r: PayrollRun) => <StatusBadge status={r.status} /> },
     {
-      key: 'actions',
-      label: '',
-      render: (r: PayrollRun) => r.status === 'processed' ? (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={generatingSlips === r.id}
-          onClick={() => handleGenerateSlips(r.id)}
-        >
-          {generatingSlips === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
-          Generate Slips
-        </Button>
-      ) : null,
+      id: 'processed_by',
+      header: 'Processed By',
+      enableSorting: false,
+      cell: (row) =>
+        row.processed_by || <span className="text-muted-foreground">—</span>,
     },
-  ];
-
-  const filterOptions = [
-    { label: 'All Statuses', value: '' },
-    { label: 'Draft', value: 'draft' },
-    { label: 'Processing', value: 'processing' },
-    { label: 'Processed', value: 'processed' },
-    { label: 'Paid', value: 'paid' },
-    { label: 'Cancelled', value: 'cancelled' },
-  ];
+    {
+      id: 'processed_at',
+      header: 'Date',
+      cell: (row) =>
+        row.processed_at
+          ? new Date(row.processed_at).toLocaleDateString()
+          : '—',
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (row) => <StatusBadge status={row.status} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'status',
+        filterPlaceholder: 'All Statuses',
+        filterOptions: [
+          { value: 'draft', label: 'Draft' },
+          { value: 'processing', label: 'Processing' },
+          { value: 'processed', label: 'Processed' },
+          { value: 'paid', label: 'Paid' },
+          { value: 'cancelled', label: 'Cancelled' },
+        ],
+      },
+    },
+  ]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Payroll"
         breadcrumbs={[{ label: 'HR' }, { label: 'Payroll' }]}
         createHref="/hr/payroll/new"
+        createLabel="New Run"
+        createIcon={Plus}
       />
-      <DataTable
+      <AdvancedDataTable
+        title="Payroll"
         columns={columns}
         data={runs}
+        pagination={pagination}
         loading={loading}
-        pagination={{ ...pagination, onPageChange: (p) => setPagination((prev) => ({ ...prev, page: p })) }}
-        onSearch={(q) => { setSearch(q); setPagination((p) => ({ ...p, page: 1 })); }}
-        onFilter={(val) => { setStatusFilter(val); setPagination((p) => ({ ...p, page: 1 })); }}
-        filterOptions={filterOptions}
-        filterLabel="Status"
+        onDelete={fetchRuns}
+        emptyMessage="No payroll runs found"
+        emptyDescription="Create your first payroll run to get started."
+        searchPlaceholder="Search payroll..."
+        storageKey="hr-payroll"
+        additionalActions={(row) =>
+          row.status === 'processed' ? (
+            <DropdownMenuItem
+              onClick={() => handleGenerateSlips(row.id)}
+              disabled={generatingSlips === row.id}
+            >
+              {generatingSlips === row.id ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="mr-2 h-4 w-4" />
+              )}
+              Generate Slips
+            </DropdownMenuItem>
+          ) : undefined
+        }
       />
     </div>
-  );
+  )
 }

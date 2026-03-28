@@ -1,93 +1,151 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { normalizePaginated } from '@/lib/api-helpers';
-import { PageHeader } from '@/components/shared/page-header';
-import { DataTable } from '@/components/shared/data-table';
-import { StatusBadge } from '@/components/shared/status-badge';
-import { format } from 'date-fns';
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
+import { Plus } from 'lucide-react'
+import api from '@/lib/api'
+import { normalizePaginated } from '@/lib/api-helpers'
+import { PageHeader } from '@/components/shared/page-header'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
+import { StatusBadge } from '@/components/shared/status-badge'
 
 interface GoodsReceipt {
-  id: string;
-  number: string;
-  po_number: string;
-  vendor_name: string;
-  received_by: string;
-  received_date: string;
-  warehouse: string;
-  status: string;
+  id: string
+  number: string
+  po_number: string
+  vendor_name: string
+  received_by: string
+  received_date: string
+  warehouse: string
+  status: string
 }
 
 export default function GoodsReceiptsPage() {
-  const [receipts, setReceipts] = useState<GoodsReceipt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [receipts, setReceipts] = useState<GoodsReceipt[]>([])
+  const [loading, setLoading] = useState(true)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    per_page: 25,
+    total: 0,
+    pages: 1,
+  })
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
+  const search = searchParams.get('search') ?? ''
+  const status = searchParams.get('status') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
+
+  const fetchReceipts = useCallback(async () => {
+    setLoading(true)
     try {
       const { data: raw } = await api.get('/purchase/goods-receipts', {
-        params: { page: pagination.page, page_size: pagination.pageSize, search, status: statusFilter || undefined },
-      });
-      const normalized = normalizePaginated<GoodsReceipt>(raw);
-      setReceipts(normalized.items);
-      setPagination((p) => ({ ...p, total: normalized.total }));
+        params: {
+          page,
+          per_page: perPage,
+          ...(search && { search }),
+          ...(status && { status }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
+        },
+      })
+      const normalized = normalizePaginated<GoodsReceipt>(raw)
+      setReceipts(normalized.items)
+      setPagination({
+        page: normalized.page,
+        per_page: normalized.per_page,
+        total: normalized.total,
+        pages: normalized.pages,
+      })
     } catch {
-      toast.error('Failed to load goods receipts');
+      toast.error('Failed to load goods receipts')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [pagination.page, pagination.pageSize, search, statusFilter]);
+  }, [page, perPage, search, status, sortBy, sortDirection])
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchReceipts()
+  }, [fetchReceipts])
 
-  const columns = [
-    { key: 'number', label: 'GR Number' },
-    { key: 'po_number', label: 'PO Number' },
-    { key: 'vendor_name', label: 'Vendor' },
-    { key: 'warehouse', label: 'Warehouse' },
-    { key: 'received_by', label: 'Received By' },
+  const columns: ServerColumnDef<GoodsReceipt>[] = [
     {
-      key: 'received_date',
-      label: 'Date',
-      render: (r: GoodsReceipt) => r.received_date ? format(new Date(r.received_date), 'MMM d, yyyy') : '—',
+      id: 'number',
+      header: 'GR Number',
     },
     {
-      key: 'status',
-      label: 'Status',
-      render: (r: GoodsReceipt) => <StatusBadge status={r.status} />,
+      id: 'po_number',
+      header: 'PO Number',
     },
-  ];
-
-  const filterOptions = [
-    { label: 'All Statuses', value: '' },
-    { label: 'Draft', value: 'draft' },
-    { label: 'Received', value: 'received' },
-    { label: 'Partial', value: 'partial' },
-    { label: 'Closed', value: 'closed' },
-  ];
+    {
+      id: 'vendor_name',
+      header: 'Vendor',
+    },
+    {
+      id: 'warehouse',
+      header: 'Warehouse',
+    },
+    {
+      id: 'received_by',
+      header: 'Received By',
+      enableSorting: false,
+    },
+    {
+      id: 'received_date',
+      header: 'Received Date',
+      cell: (row) =>
+        row.received_date
+          ? new Date(row.received_date).toLocaleDateString()
+          : <span className="text-muted-foreground">—</span>,
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (row) => <StatusBadge status={row.status} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'status',
+        filterPlaceholder: 'All Statuses',
+        filterOptions: [
+          { value: 'draft', label: 'Draft' },
+          { value: 'received', label: 'Received' },
+          { value: 'partial', label: 'Partial' },
+          { value: 'closed', label: 'Closed' },
+        ],
+      },
+    },
+  ]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Goods Receipts"
         breadcrumbs={[{ label: 'Purchase' }, { label: 'Goods Receipts' }]}
         createHref="/purchase/goods-receipts/new"
+        createLabel="New Receipt"
+        createIcon={Plus}
       />
-      <DataTable
+      <AdvancedDataTable
+        title="Goods Receipts"
         columns={columns}
         data={receipts}
+        pagination={pagination}
         loading={loading}
-        pagination={{ ...pagination, onPageChange: (p) => setPagination((prev) => ({ ...prev, page: p })) }}
-        onSearch={(q) => { setSearch(q); setPagination((p) => ({ ...p, page: 1 })); }}
-        onFilter={(val) => { setStatusFilter(val); setPagination((p) => ({ ...p, page: 1 })); }}
-        filterOptions={filterOptions}
-        filterLabel="Status"
+        editBasePath="/purchase/goods-receipts"
+        deleteEndpoint="/purchase/goods-receipts"
+        onDelete={fetchReceipts}
+        emptyMessage="No goods receipts found"
+        emptyDescription="Create your first goods receipt to get started."
+        searchPlaceholder="Search goods receipts..."
+        storageKey="purchase-goods-receipts"
       />
     </div>
-  );
+  )
 }

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { User, MapPin, Truck, Settings as SettingsIcon, Info, FileText, Plus, X, Loader2 } from 'lucide-react'
 import api from '@/lib/api'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -17,8 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 interface CustomerForm {
   // Details
@@ -51,6 +50,12 @@ interface CustomerForm {
   price_list: string
 }
 
+interface CustomField {
+  id: string
+  key: string
+  value: string
+}
+
 const INITIAL: CustomerForm = {
   code: '',
   name: '',
@@ -78,11 +83,28 @@ const INITIAL: CustomerForm = {
   price_list: '',
 }
 
+/* ── Reusable key-value row ─────────────────────────────────────────── */
+function FormRow({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[180px_1fr] items-start gap-4 py-3.5 border-b border-border/30 last:border-b-0">
+      <Label className="pt-2.5 text-[13px] font-medium text-muted-foreground leading-tight">
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </Label>
+      <div className="flex flex-col gap-1">
+        {children}
+        {error && <p className="text-[11px] text-destructive">{error}</p>}
+      </div>
+    </div>
+  )
+}
+
 export default function NewCustomerPage() {
   const router = useRouter()
   const [form, setForm] = useState<CustomerForm>(INITIAL)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof CustomerForm, string>>>({})
+  const [customFields, setCustomFields] = useState<CustomField[]>([])
 
   const set =
     (key: keyof CustomerForm) =>
@@ -106,6 +128,23 @@ export default function NewCustomerPage() {
     }))
   }
 
+  const addCustomField = () => {
+    setCustomFields((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), key: '', value: '' },
+    ])
+  }
+
+  const updateCustomField = (id: string, field: 'key' | 'value', val: string) => {
+    setCustomFields((prev) =>
+      prev.map((cf) => (cf.id === id ? { ...cf, [field]: val } : cf))
+    )
+  }
+
+  const removeCustomField = (id: string) => {
+    setCustomFields((prev) => prev.filter((cf) => cf.id !== id))
+  }
+
   const validate = (): boolean => {
     const errs: Partial<Record<keyof CustomerForm, string>> = {}
     if (!form.name.trim()) errs.name = 'Customer name is required'
@@ -118,9 +157,14 @@ export default function NewCustomerPage() {
     if (!validate()) return
     setSaving(true)
     try {
+      const customData: Record<string, string> = {}
+      customFields.forEach((cf) => {
+        if (cf.key.trim()) customData[cf.key.trim()] = cf.value
+      })
       const payload = {
         ...form,
         credit_limit: form.credit_limit ? Number(form.credit_limit) : null,
+        custom_fields: Object.keys(customData).length > 0 ? customData : null,
       }
       await api.post('/crm/customers', payload)
       toast.success('Customer created successfully')
@@ -136,345 +180,393 @@ export default function NewCustomerPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-5xl">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="New Customer"
         breadcrumbs={[
           { label: 'CRM' },
           { label: 'Customers', href: '/crm/customers' },
-          { label: 'New' },
         ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-lg px-4 text-[13px]"
+              onClick={() => router.back()}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="customer-form"
+              size="sm"
+              className="h-9 rounded-lg px-5 text-[13px] font-semibold shadow-sm"
+              disabled={saving}
+            >
+              {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {saving ? 'Creating...' : 'Create Customer'}
+            </Button>
+          </div>
+        }
       />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        <Tabs defaultValue="details">
-          <TabsList>
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="billing">Billing Address</TabsTrigger>
-            <TabsTrigger value="shipping">Shipping Address</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
 
-          <TabsContent value="details" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                  Customer Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="name">
-                    Customer Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="name"
-                    value={form.name}
-                    onChange={set('name')}
-                    placeholder="Acme Corporation"
-                    aria-invalid={!!errors.name}
-                  />
-                  {errors.name && (
-                    <p className="text-xs text-destructive">{errors.name}</p>
-                  )}
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="code">Customer Code</Label>
-                  <Input
-                    id="code"
-                    value={form.code}
-                    onChange={set('code')}
-                    placeholder="CUST-0001"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Type</Label>
-                  <Select value={form.type} onValueChange={setSelect('type')}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="individual">Individual</SelectItem>
-                      <SelectItem value="company">Company</SelectItem>
-                      <SelectItem value="government">Government</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={setSelect('status')}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                      <SelectItem value="archived">Archived</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={form.email}
-                    onChange={set('email')}
-                    placeholder="contact@acme.com"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    value={form.phone}
-                    onChange={set('phone')}
-                    placeholder="+1 555 0100"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="mobile">Mobile</Label>
-                  <Input
-                    id="mobile"
-                    value={form.mobile}
-                    onChange={set('mobile')}
-                    placeholder="+1 555 0101"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="website">Website</Label>
-                  <Input
-                    id="website"
-                    value={form.website}
-                    onChange={set('website')}
-                    placeholder="https://acme.com"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="tax_id">Tax ID / VAT Number</Label>
-                  <Input
-                    id="tax_id"
-                    value={form.tax_id}
-                    onChange={set('tax_id')}
-                    placeholder="12-3456789"
-                  />
-                </div>
-                <div className="sm:col-span-2 flex flex-col gap-1.5">
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    value={form.notes}
-                    onChange={set('notes')}
-                    rows={3}
-                    placeholder="Internal notes..."
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="billing" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+      <form id="customer-form" onSubmit={handleSubmit}>
+        <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
+          <Tabs defaultValue="details" className="gap-0">
+            <div className="border-b border-border/40 bg-muted/30 px-6">
+              <TabsList variant="line" className="!h-auto gap-2">
+                <TabsTrigger value="details" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <User className="h-[18px] w-[18px]" />
+                  Details
+                </TabsTrigger>
+                <TabsTrigger value="billing" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <MapPin className="h-[18px] w-[18px]" />
                   Billing Address
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2 flex flex-col gap-1.5">
-                  <Label htmlFor="billing_address">Street Address</Label>
-                  <Input
-                    id="billing_address"
-                    value={form.billing_address}
-                    onChange={set('billing_address')}
-                    placeholder="123 Main St"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="billing_city">City</Label>
-                  <Input
-                    id="billing_city"
-                    value={form.billing_city}
-                    onChange={set('billing_city')}
-                    placeholder="New York"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="billing_state">State / Province</Label>
-                  <Input
-                    id="billing_state"
-                    value={form.billing_state}
-                    onChange={set('billing_state')}
-                    placeholder="NY"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="billing_postal_code">Postal Code</Label>
-                  <Input
-                    id="billing_postal_code"
-                    value={form.billing_postal_code}
-                    onChange={set('billing_postal_code')}
-                    placeholder="10001"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="billing_country">Country</Label>
-                  <Input
-                    id="billing_country"
-                    value={form.billing_country}
-                    onChange={set('billing_country')}
-                    placeholder="US"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                </TabsTrigger>
+                <TabsTrigger value="shipping" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Truck className="h-[18px] w-[18px]" />
+                  Shipping Address
+                </TabsTrigger>
+                <TabsTrigger value="settings" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <SettingsIcon className="h-[18px] w-[18px]" />
+                  Settings
+                </TabsTrigger>
+                <TabsTrigger value="additional" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Info className="h-[18px] w-[18px]" />
+                  Additional Information
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <FileText className="h-[18px] w-[18px]" />
+                  Notes
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-          <TabsContent value="shipping" className="mt-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                    Shipping Address
-                  </CardTitle>
+            {/* Tab: Details */}
+            <TabsContent value="details" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Customer Name" required error={errors.name}>
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={set('name')}
+                  placeholder="Acme Corporation"
+                  aria-invalid={!!errors.name}
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Customer Code">
+                <Input
+                  id="code"
+                  value={form.code}
+                  onChange={set('code')}
+                  placeholder="CUST-0001"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Type">
+                <Select value={form.type} onValueChange={setSelect('type')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="individual">Individual</SelectItem>
+                    <SelectItem value="company">Company</SelectItem>
+                    <SelectItem value="government">Government</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Status">
+                <Select value={form.status} onValueChange={setSelect('status')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="archived">Archived</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Email">
+                <Input
+                  id="email"
+                  type="email"
+                  value={form.email}
+                  onChange={set('email')}
+                  placeholder="contact@acme.com"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Phone">
+                <Input
+                  id="phone"
+                  value={form.phone}
+                  onChange={set('phone')}
+                  placeholder="+1 555 0100"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Mobile">
+                <Input
+                  id="mobile"
+                  value={form.mobile}
+                  onChange={set('mobile')}
+                  placeholder="+1 555 0101"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Website">
+                <Input
+                  id="website"
+                  value={form.website}
+                  onChange={set('website')}
+                  placeholder="https://acme.com"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Tax ID / VAT Number">
+                <Input
+                  id="tax_id"
+                  value={form.tax_id}
+                  onChange={set('tax_id')}
+                  placeholder="12-3456789"
+                  className="h-10"
+                />
+              </FormRow>
+            </TabsContent>
+
+            {/* Tab: Billing Address */}
+            <TabsContent value="billing" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Street Address">
+                <Input
+                  id="billing_address"
+                  value={form.billing_address}
+                  onChange={set('billing_address')}
+                  placeholder="123 Main St"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="City">
+                <Input
+                  id="billing_city"
+                  value={form.billing_city}
+                  onChange={set('billing_city')}
+                  placeholder="New York"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="State / Province">
+                <Input
+                  id="billing_state"
+                  value={form.billing_state}
+                  onChange={set('billing_state')}
+                  placeholder="NY"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Postal Code">
+                <Input
+                  id="billing_postal_code"
+                  value={form.billing_postal_code}
+                  onChange={set('billing_postal_code')}
+                  placeholder="10001"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Country">
+                <Input
+                  id="billing_country"
+                  value={form.billing_country}
+                  onChange={set('billing_country')}
+                  placeholder="US"
+                  className="h-10"
+                />
+              </FormRow>
+            </TabsContent>
+
+            {/* Tab: Shipping Address */}
+            <TabsContent value="shipping" className="p-6 lg:px-8 lg:py-2">
+              <div className="flex items-center justify-between pb-2">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground/70">Shipping Address</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-lg px-3 text-[12px]"
+                  onClick={copyBillingToShipping}
+                >
+                  Copy from Billing
+                </Button>
+              </div>
+              <FormRow label="Street Address">
+                <Input
+                  id="shipping_address"
+                  value={form.shipping_address}
+                  onChange={set('shipping_address')}
+                  placeholder="456 Commerce Ave"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="City">
+                <Input
+                  id="shipping_city"
+                  value={form.shipping_city}
+                  onChange={set('shipping_city')}
+                  placeholder="New York"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="State / Province">
+                <Input
+                  id="shipping_state"
+                  value={form.shipping_state}
+                  onChange={set('shipping_state')}
+                  placeholder="NY"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Postal Code">
+                <Input
+                  id="shipping_postal_code"
+                  value={form.shipping_postal_code}
+                  onChange={set('shipping_postal_code')}
+                  placeholder="10001"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Country">
+                <Input
+                  id="shipping_country"
+                  value={form.shipping_country}
+                  onChange={set('shipping_country')}
+                  placeholder="US"
+                  className="h-10"
+                />
+              </FormRow>
+            </TabsContent>
+
+            {/* Tab: Settings */}
+            <TabsContent value="settings" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Currency">
+                <Select value={form.currency} onValueChange={setSelect('currency')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD – US Dollar</SelectItem>
+                    <SelectItem value="EUR">EUR – Euro</SelectItem>
+                    <SelectItem value="GBP">GBP – British Pound</SelectItem>
+                    <SelectItem value="INR">INR – Indian Rupee</SelectItem>
+                    <SelectItem value="AED">AED – UAE Dirham</SelectItem>
+                    <SelectItem value="JPY">JPY – Japanese Yen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Payment Terms">
+                <Select value={form.payment_terms} onValueChange={setSelect('payment_terms')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="immediate">Immediate</SelectItem>
+                    <SelectItem value="net15">Net 15</SelectItem>
+                    <SelectItem value="net30">Net 30</SelectItem>
+                    <SelectItem value="net45">Net 45</SelectItem>
+                    <SelectItem value="net60">Net 60</SelectItem>
+                    <SelectItem value="net90">Net 90</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Credit Limit">
+                <Input
+                  id="credit_limit"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.credit_limit}
+                  onChange={set('credit_limit')}
+                  placeholder="10000.00"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Price List">
+                <Input
+                  id="price_list"
+                  value={form.price_list}
+                  onChange={set('price_list')}
+                  placeholder="Standard Retail"
+                  className="h-10"
+                />
+              </FormRow>
+            </TabsContent>
+
+            {/* Tab: Additional Information — dynamic custom key-value fields */}
+            <TabsContent value="additional" className="p-6 lg:px-8 lg:py-2">
+              <div className="pt-2 pb-2 flex items-center justify-between">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground/70">Custom Fields</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-lg px-3 text-[12px] gap-1.5"
+                  onClick={addCustomField}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Field
+                </Button>
+              </div>
+
+              {customFields.length === 0 && (
+                <div className="py-6 text-center border border-dashed border-border/50 rounded-lg">
+                  <p className="text-[13px] text-muted-foreground">No custom fields added yet.</p>
+                  <p className="text-[12px] text-muted-foreground/60 mt-1">Click &quot;Add Field&quot; to add custom key-value data.</p>
+                </div>
+              )}
+
+              {customFields.map((cf) => (
+                <div
+                  key={cf.id}
+                  className="grid grid-cols-[180px_1fr_36px] items-center gap-4 py-3 border-b border-border/30 last:border-b-0"
+                >
+                  <Input
+                    value={cf.key}
+                    onChange={(e) => updateCustomField(cf.id, 'key', e.target.value)}
+                    placeholder="Field name"
+                    className="h-10 text-[13px] font-medium text-muted-foreground"
+                  />
+                  <Input
+                    value={cf.value}
+                    onChange={(e) => updateCustomField(cf.id, 'value', e.target.value)}
+                    placeholder="Value"
+                    className="h-10"
+                  />
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    onClick={copyBillingToShipping}
+                    className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeCustomField(cf.id)}
                   >
-                    Copy from Billing
+                    <X className="h-4 w-4" />
                   </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2 flex flex-col gap-1.5">
-                  <Label htmlFor="shipping_address">Street Address</Label>
-                  <Input
-                    id="shipping_address"
-                    value={form.shipping_address}
-                    onChange={set('shipping_address')}
-                    placeholder="456 Commerce Ave"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="shipping_city">City</Label>
-                  <Input
-                    id="shipping_city"
-                    value={form.shipping_city}
-                    onChange={set('shipping_city')}
-                    placeholder="New York"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="shipping_state">State / Province</Label>
-                  <Input
-                    id="shipping_state"
-                    value={form.shipping_state}
-                    onChange={set('shipping_state')}
-                    placeholder="NY"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="shipping_postal_code">Postal Code</Label>
-                  <Input
-                    id="shipping_postal_code"
-                    value={form.shipping_postal_code}
-                    onChange={set('shipping_postal_code')}
-                    placeholder="10001"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="shipping_country">Country</Label>
-                  <Input
-                    id="shipping_country"
-                    value={form.shipping_country}
-                    onChange={set('shipping_country')}
-                    placeholder="US"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              ))}
+            </TabsContent>
 
-          <TabsContent value="settings" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                  Commercial Settings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Currency</Label>
-                  <Select value={form.currency} onValueChange={setSelect('currency')}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD – US Dollar</SelectItem>
-                      <SelectItem value="EUR">EUR – Euro</SelectItem>
-                      <SelectItem value="GBP">GBP – British Pound</SelectItem>
-                      <SelectItem value="INR">INR – Indian Rupee</SelectItem>
-                      <SelectItem value="AED">AED – UAE Dirham</SelectItem>
-                      <SelectItem value="JPY">JPY – Japanese Yen</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Payment Terms</Label>
-                  <Select value={form.payment_terms} onValueChange={setSelect('payment_terms')}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="immediate">Immediate</SelectItem>
-                      <SelectItem value="net15">Net 15</SelectItem>
-                      <SelectItem value="net30">Net 30</SelectItem>
-                      <SelectItem value="net45">Net 45</SelectItem>
-                      <SelectItem value="net60">Net 60</SelectItem>
-                      <SelectItem value="net90">Net 90</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="credit_limit">Credit Limit</Label>
-                  <Input
-                    id="credit_limit"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.credit_limit}
-                    onChange={set('credit_limit')}
-                    placeholder="10000.00"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="price_list">Price List</Label>
-                  <Input
-                    id="price_list"
-                    value={form.price_list}
-                    onChange={set('price_list')}
-                    placeholder="Standard Retail"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        <div className="flex justify-end gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-            disabled={saving}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {saving ? 'Creating...' : 'Create Customer'}
-          </Button>
+            {/* Tab: Notes */}
+            <TabsContent value="notes" className="p-6 lg:p-8">
+              <Textarea
+                value={form.notes}
+                onChange={set('notes')}
+                placeholder="Add any relevant notes about this customer..."
+                rows={10}
+                className="resize-none"
+              />
+            </TabsContent>
+          </Tabs>
         </div>
       </form>
     </div>

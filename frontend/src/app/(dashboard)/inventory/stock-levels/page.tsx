@@ -1,155 +1,161 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { normalizePaginated } from '@/lib/api-helpers';
-import { PageHeader } from '@/components/shared/page-header';
-import { DataTable } from '@/components/shared/data-table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
+import api from '@/lib/api'
+import { normalizePaginated } from '@/lib/api-helpers'
+import { PageHeader } from '@/components/shared/page-header'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
 
 interface StockLevel {
-  id: string;
-  product_name: string;
-  product_sku: string;
-  warehouse_name: string;
-  quantity_on_hand: number;
-  quantity_reserved: number;
-  quantity_available: number;
-  reorder_point: number;
-  unit: string;
-}
-
-interface Warehouse {
-  id: string;
-  name: string;
+  id: string
+  product_name: string
+  product_sku: string
+  warehouse_name: string
+  quantity_on_hand: number
+  quantity_reserved: number
+  quantity_available: number
+  reorder_point: number
+  unit: string
 }
 
 export default function StockLevelsPage() {
-  const [stock, setStock] = useState<StockLevel[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
-  const [search, setSearch] = useState('');
-  const [warehouseFilter, setWarehouseFilter] = useState('');
-  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [stockLevels, setStockLevels] = useState<StockLevel[]>([])
+  const [loading, setLoading] = useState(true)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    per_page: 25,
+    total: 0,
+    pages: 1,
+  })
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
+  const search = searchParams.get('search') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
+
+  const fetchStockLevels = useCallback(async () => {
+    setLoading(true)
     try {
       const { data: raw } = await api.get('/inventory/stock-levels', {
         params: {
-          page: pagination.page,
-          page_size: pagination.pageSize,
-          search,
-          warehouse: warehouseFilter || undefined,
-          low_stock: lowStockOnly || undefined,
+          page,
+          per_page: perPage,
+          ...(search && { search }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
         },
-      });
-      const normalized = normalizePaginated<StockLevel>(raw);
-      setStock(normalized.items);
-      setPagination((p) => ({ ...p, total: normalized.total }));
+      })
+      const normalized = normalizePaginated<StockLevel>(raw)
+      setStockLevels(normalized.items)
+      setPagination({
+        page: normalized.page,
+        per_page: normalized.per_page,
+        total: normalized.total,
+        pages: normalized.pages,
+      })
     } catch {
-      toast.error('Failed to load stock levels');
+      toast.error('Failed to load stock levels')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [pagination.page, pagination.pageSize, search, warehouseFilter, lowStockOnly]);
+  }, [page, perPage, search, sortBy, sortDirection])
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchStockLevels()
+  }, [fetchStockLevels])
 
-  useEffect(() => {
-    api.get('/inventory/warehouses', { params: { page_size: 200 } })
-      .then(({ data }) => setWarehouses(normalizePaginated<Warehouse>(data).items))
-      .catch(() => {});
-  }, []);
-
-  const columns = [
+  const columns: ServerColumnDef<StockLevel>[] = [
     {
-      key: 'product',
-      label: 'Product',
-      render: (s: StockLevel) => (
-        <div>
-          <div className="font-medium text-sm">{s.product_name}</div>
-          <div className="text-xs text-muted-foreground">{s.product_sku}</div>
+      id: 'product',
+      header: 'Product',
+      enableSorting: false,
+      cell: (row) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{row.product_name}</span>
+          <span className="text-xs text-muted-foreground">{row.product_sku}</span>
         </div>
       ),
     },
-    { key: 'warehouse_name', label: 'Warehouse' },
     {
-      key: 'quantity_on_hand',
-      label: 'On Hand',
-      render: (s: StockLevel) => (
-        <span className="tabular-nums font-medium">{s.quantity_on_hand.toLocaleString()} {s.unit}</span>
+      id: 'warehouse_name',
+      header: 'Warehouse',
+    },
+    {
+      id: 'quantity_on_hand',
+      header: 'On Hand',
+      cell: (row) => (
+        <span className="tabular-nums font-medium">
+          {row.quantity_on_hand?.toLocaleString()} {row.unit}
+        </span>
       ),
     },
     {
-      key: 'quantity_reserved',
-      label: 'Reserved',
-      render: (s: StockLevel) => (
-        <span className="tabular-nums text-muted-foreground">{s.quantity_reserved.toLocaleString()} {s.unit}</span>
+      id: 'quantity_reserved',
+      header: 'Reserved',
+      cell: (row) => (
+        <span className="tabular-nums text-muted-foreground">
+          {row.quantity_reserved?.toLocaleString()} {row.unit}
+        </span>
       ),
     },
     {
-      key: 'quantity_available',
-      label: 'Available',
-      render: (s: StockLevel) => (
-        <span className="tabular-nums font-semibold">{s.quantity_available.toLocaleString()} {s.unit}</span>
+      id: 'quantity_available',
+      header: 'Available',
+      cell: (row) => (
+        <span className="tabular-nums font-semibold">
+          {row.quantity_available?.toLocaleString()} {row.unit}
+        </span>
       ),
     },
     {
-      key: 'status',
-      label: 'Stock Status',
-      render: (s: StockLevel) => {
-        const isLow = s.quantity_available <= s.reorder_point;
-        return (
-          <span className={`inline-flex items-center gap-1 text-xs font-medium ${isLow ? 'text-orange-600' : 'text-green-600'}`}>
-            {isLow ? <AlertTriangle className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
-            {isLow ? 'Low Stock' : 'In Stock'}
-          </span>
-        );
+      id: 'stock_status',
+      header: 'Status',
+      enableSorting: false,
+      cell: (row) => {
+        const isLow =
+          row.reorder_point != null &&
+          row.quantity_available <= row.reorder_point
+        return isLow ? (
+          <div className="flex items-center gap-1.5 text-amber-600">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">Low Stock</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-green-600">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-sm font-medium">In Stock</span>
+          </div>
+        )
       },
     },
-  ];
-
-  const warehouseOptions = [
-    { label: 'All Warehouses', value: '__all__' },
-    ...warehouses.map((w) => ({ label: w.name, value: String(w.id) })),
-  ];
+  ]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Stock Levels"
         breadcrumbs={[{ label: 'Inventory' }, { label: 'Stock Levels' }]}
       />
-      <div className="flex items-center gap-3">
-        <Select value={warehouseFilter || '__all__'} onValueChange={(v) => { setWarehouseFilter(v === '__all__' ? '' : v); setPagination((p) => ({ ...p, page: 1 })); }}>
-          <SelectTrigger className="w-52"><SelectValue placeholder="All Warehouses" /></SelectTrigger>
-          <SelectContent>
-            {warehouseOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-          <input
-            type="checkbox"
-            className="rounded border border-input"
-            checked={lowStockOnly}
-            onChange={(e) => { setLowStockOnly(e.target.checked); setPagination((p) => ({ ...p, page: 1 })); }}
-          />
-          Low stock only
-        </label>
-      </div>
-      <DataTable
+      <AdvancedDataTable
+        title="Stock Levels"
         columns={columns}
-        data={stock}
+        data={stockLevels}
+        pagination={pagination}
         loading={loading}
-        pagination={{ ...pagination, onPageChange: (p) => setPagination((prev) => ({ ...prev, page: p })) }}
-        onSearch={(q) => { setSearch(q); setPagination((p) => ({ ...p, page: 1 })); }}
+        emptyMessage="No stock levels found"
+        emptyDescription="Stock levels will appear here once products are added to warehouses."
+        searchPlaceholder="Search stock levels..."
+        storageKey="inventory-stock-levels"
       />
     </div>
-  );
+  )
 }

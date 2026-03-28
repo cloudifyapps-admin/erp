@@ -1,135 +1,154 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { normalizePaginated } from '@/lib/api-helpers';
-import { PageHeader } from '@/components/shared/page-header';
-import { DataTable } from '@/components/shared/data-table';
-import { StatusBadge } from '@/components/shared/status-badge';
-import { DeleteDialog } from '@/components/shared/delete-dialog';
-import { Button } from '@/components/ui/button';
-import { Trash2, Pencil, Warehouse } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
+import { Plus, Warehouse as WarehouseIcon } from 'lucide-react'
+import api from '@/lib/api'
+import { normalizePaginated } from '@/lib/api-helpers'
+import { PageHeader } from '@/components/shared/page-header'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
+import { StatusBadge } from '@/components/shared/status-badge'
 
 interface WarehouseItem {
-  id: string;
-  name: string;
-  code: string;
-  address: string;
-  city: string;
-  country: string;
-  manager: string;
-  capacity: number;
-  status: string;
+  id: string
+  name: string
+  code: string
+  address: string
+  city: string
+  country: string
+  manager: string
+  capacity: number
+  status: string
 }
 
 export default function WarehousesPage() {
-  const router = useRouter();
-  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
-  const [search, setSearch] = useState('');
-  const [deleteTarget, setDeleteTarget] = useState<WarehouseItem | null>(null);
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    per_page: 25,
+    total: 0,
+    pages: 1,
+  })
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
+  const search = searchParams.get('search') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
+
+  const fetchWarehouses = useCallback(async () => {
+    setLoading(true)
     try {
       const { data: raw } = await api.get('/inventory/warehouses', {
-        params: { page: pagination.page, page_size: pagination.pageSize, search },
-      });
-      const normalized = normalizePaginated<WarehouseItem>(raw);
-      setWarehouses(normalized.items);
-      setPagination((p) => ({ ...p, total: normalized.total }));
+        params: {
+          page,
+          per_page: perPage,
+          ...(search && { search }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
+        },
+      })
+      const normalized = normalizePaginated<WarehouseItem>(raw)
+      setWarehouses(normalized.items)
+      setPagination({
+        page: normalized.page,
+        per_page: normalized.per_page,
+        total: normalized.total,
+        pages: normalized.pages,
+      })
     } catch {
-      toast.error('Failed to load warehouses');
+      toast.error('Failed to load warehouses')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [pagination.page, pagination.pageSize, search]);
+  }, [page, perPage, search, sortBy, sortDirection])
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchWarehouses()
+  }, [fetchWarehouses])
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await api.delete(`/inventory/warehouses/${deleteTarget.id}/`);
-      toast.success('Warehouse deleted');
-      setDeleteTarget(null);
-      fetchData();
-    } catch {
-      toast.error('Failed to delete warehouse');
-    }
-  };
-
-  const columns = [
+  const columns: ServerColumnDef<WarehouseItem>[] = [
     {
-      key: 'name',
-      label: 'Warehouse',
-      render: (w: WarehouseItem) => (
-        <div className="flex items-center gap-2">
-          <div className="flex size-7 items-center justify-center rounded bg-muted">
-            <Warehouse className="size-4 text-muted-foreground" />
+      id: 'name',
+      header: 'Warehouse',
+      cell: (row) => (
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+            <WarehouseIcon className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div>
-            <div className="font-medium text-sm">{w.name}</div>
-            <div className="text-xs text-muted-foreground">{w.code}</div>
+          <div className="flex flex-col">
+            <span className="font-medium">{row.name}</span>
+            <span className="text-xs text-muted-foreground">{row.code}</span>
           </div>
         </div>
       ),
     },
     {
-      key: 'location',
-      label: 'Location',
-      render: (w: WarehouseItem) => [w.city, w.country].filter(Boolean).join(', ') || '—',
-    },
-    { key: 'manager', label: 'Manager' },
-    {
-      key: 'capacity',
-      label: 'Capacity',
-      render: (w: WarehouseItem) => w.capacity ? w.capacity.toLocaleString() : '—',
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (w: WarehouseItem) => <StatusBadge status={w.status} />,
+      id: 'location',
+      header: 'Location',
+      enableSorting: false,
+      cell: (row) => {
+        const parts = [row.city, row.country].filter(Boolean)
+        return parts.length > 0 ? (
+          <span>{parts.join(', ')}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )
+      },
     },
     {
-      key: 'actions',
-      label: '',
-      render: (w: WarehouseItem) => (
-        <div className="flex gap-2 justify-end">
-          <Button size="icon-sm" variant="ghost" onClick={() => router.push(`/inventory/warehouses/${w.id}/edit`)}>
-            <Pencil />
-          </Button>
-          <Button size="icon-sm" variant="ghost" onClick={() => setDeleteTarget(w)}>
-            <Trash2 className="text-destructive" />
-          </Button>
-        </div>
+      id: 'manager',
+      header: 'Manager',
+      enableSorting: false,
+      cell: (row) =>
+        row.manager || <span className="text-muted-foreground">—</span>,
+    },
+    {
+      id: 'capacity',
+      header: 'Capacity',
+      cell: (row) => (
+        <span className="tabular-nums">
+          {row.capacity?.toLocaleString() ?? '—'}
+        </span>
       ),
     },
-  ];
+    {
+      id: 'status',
+      header: 'Status',
+      cell: (row) => <StatusBadge status={row.status} />,
+    },
+  ]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Warehouses"
         breadcrumbs={[{ label: 'Inventory' }, { label: 'Warehouses' }]}
         createHref="/inventory/warehouses/new"
+        createLabel="New Warehouse"
+        createIcon={Plus}
       />
-      <DataTable
+      <AdvancedDataTable
+        title="Warehouses"
         columns={columns}
         data={warehouses}
+        pagination={pagination}
         loading={loading}
-        pagination={{ ...pagination, onPageChange: (p) => setPagination((prev) => ({ ...prev, page: p })) }}
-        onSearch={(q) => { setSearch(q); setPagination((p) => ({ ...p, page: 1 })); }}
-      />
-      <DeleteDialog
-        open={!!deleteTarget}
-        title={`Delete warehouse "${deleteTarget?.name}"?`}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
+        editBasePath="/inventory/warehouses"
+        deleteEndpoint="/inventory/warehouses"
+        onDelete={fetchWarehouses}
+        emptyMessage="No warehouses found"
+        emptyDescription="Create your first warehouse to get started."
+        searchPlaceholder="Search warehouses..."
+        storageKey="inventory-warehouses"
       />
     </div>
-  );
+  )
 }

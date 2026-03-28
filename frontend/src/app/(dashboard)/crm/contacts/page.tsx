@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 import api from '@/lib/api'
 import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
-import { DataTable, type ColumnDef } from '@/components/shared/data-table'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
 import { StatusBadge } from '@/components/shared/status-badge'
-import { FilterBar } from '@/components/shared/filter-bar'
 
 interface Contact {
   id: string
@@ -24,15 +26,8 @@ interface Contact {
   created_at: string
 }
 
-interface PaginatedResponse {
-  items: Contact[]
-  count: number
-  page: number
-  per_page: number
-  pages: number
-}
-
 export default function ContactsPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,12 +35,15 @@ export default function ContactsPage() {
     page: 1,
     per_page: 25,
     total: 0,
-    total_pages: 1,
+    pages: 1,
   })
 
   const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
   const search = searchParams.get('search') ?? ''
   const status = searchParams.get('status') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
 
   const fetchContacts = useCallback(async () => {
     setLoading(true)
@@ -53,9 +51,11 @@ export default function ContactsPage() {
       const { data: raw } = await api.get('/crm/contacts', {
         params: {
           page,
-          per_page: 25,
+          per_page: perPage,
           ...(search && { search }),
           ...(status && { status }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
         },
       })
       const normalized = normalizePaginated<Contact>(raw)
@@ -64,23 +64,24 @@ export default function ContactsPage() {
         page: normalized.page,
         per_page: normalized.per_page,
         total: normalized.total,
-        total_pages: normalized.pages,
+        pages: normalized.pages,
       })
     } catch {
       toast.error('Failed to load contacts')
     } finally {
       setLoading(false)
     }
-  }, [page, search, status])
+  }, [page, perPage, search, status, sortBy, sortDirection])
 
   useEffect(() => {
     fetchContacts()
   }, [fetchContacts])
 
-  const columns: ColumnDef<Contact>[] = [
+  const columns: ServerColumnDef<Contact>[] = [
     {
-      key: 'name',
+      id: 'first_name',
       header: 'Name',
+      enableSorting: true,
       cell: (row) => (
         <span className="font-medium">
           {row.first_name} {row.last_name}
@@ -88,33 +89,45 @@ export default function ContactsPage() {
       ),
     },
     {
-      key: 'company',
+      id: 'company',
       header: 'Company',
       cell: (row) => row.company || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'job_title',
+      id: 'job_title',
       header: 'Job Title',
       cell: (row) => row.job_title || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'email',
+      id: 'email',
       header: 'Email',
+      cell: (row) => row.email || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'phone',
+      id: 'phone',
       header: 'Phone',
+      enableSorting: false,
       cell: (row) => row.phone || row.mobile || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'status',
+      id: 'status',
       header: 'Status',
       cell: (row) => <StatusBadge status={row.status} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'status',
+        filterPlaceholder: 'All Statuses',
+        filterOptions: [
+          { value: 'active', label: 'Active' },
+          { value: 'inactive', label: 'Inactive' },
+          { value: 'archived', label: 'Archived' },
+        ],
+      },
     },
   ]
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Contacts"
         breadcrumbs={[{ label: 'CRM' }, { label: 'Contacts' }]}
@@ -122,21 +135,8 @@ export default function ContactsPage() {
         createLabel="New Contact"
         createIcon={Plus}
       />
-      <FilterBar
-        searchPlaceholder="Search contacts..."
-        filters={[
-          {
-            key: 'status',
-            placeholder: 'All Statuses',
-            options: [
-              { value: 'active', label: 'Active' },
-              { value: 'inactive', label: 'Inactive' },
-              { value: 'archived', label: 'Archived' },
-            ],
-          },
-        ]}
-      />
-      <DataTable
+      <AdvancedDataTable
+        title="Contacts"
         columns={columns}
         data={contacts}
         pagination={pagination}
@@ -146,6 +146,8 @@ export default function ContactsPage() {
         onDelete={fetchContacts}
         emptyMessage="No contacts found"
         emptyDescription="Create your first contact to get started."
+        searchPlaceholder="Search contacts..."
+        storageKey="crm-contacts"
       />
     </div>
   )

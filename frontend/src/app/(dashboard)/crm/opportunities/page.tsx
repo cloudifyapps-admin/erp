@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 import api from '@/lib/api'
 import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
-import { DataTable, type ColumnDef } from '@/components/shared/data-table'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
 import { StatusBadge } from '@/components/shared/status-badge'
-import { FilterBar } from '@/components/shared/filter-bar'
 
 interface Opportunity {
   id: string
@@ -23,14 +25,6 @@ interface Opportunity {
   assigned_to_name?: string
   status: string
   created_at: string
-}
-
-interface PaginatedResponse {
-  items: Opportunity[]
-  count: number
-  page: number
-  per_page: number
-  pages: number
 }
 
 const STAGE_COLORS: Record<string, string> = {
@@ -55,6 +49,7 @@ function StageBadge({ stage }: { stage: string }) {
 }
 
 export default function OpportunitiesPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,12 +57,15 @@ export default function OpportunitiesPage() {
     page: 1,
     per_page: 25,
     total: 0,
-    total_pages: 1,
+    pages: 1,
   })
 
   const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
   const search = searchParams.get('search') ?? ''
   const stage = searchParams.get('stage') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
 
   const fetchOpportunities = useCallback(async () => {
     setLoading(true)
@@ -75,9 +73,11 @@ export default function OpportunitiesPage() {
       const { data: raw } = await api.get('/crm/opportunities', {
         params: {
           page,
-          per_page: 25,
+          per_page: perPage,
           ...(search && { search }),
           ...(stage && { stage }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
         },
       })
       const normalized = normalizePaginated<Opportunity>(raw)
@@ -86,38 +86,52 @@ export default function OpportunitiesPage() {
         page: normalized.page,
         per_page: normalized.per_page,
         total: normalized.total,
-        total_pages: normalized.pages,
+        pages: normalized.pages,
       })
     } catch {
       toast.error('Failed to load opportunities')
     } finally {
       setLoading(false)
     }
-  }, [page, search, stage])
+  }, [page, perPage, search, stage, sortBy, sortDirection])
 
   useEffect(() => {
     fetchOpportunities()
   }, [fetchOpportunities])
 
-  const columns: ColumnDef<Opportunity>[] = [
+  const columns: ServerColumnDef<Opportunity>[] = [
     {
-      key: 'name',
+      id: 'name',
       header: 'Opportunity',
       cell: (row) => <span className="font-medium">{row.name}</span>,
     },
     {
-      key: 'customer_name',
+      id: 'customer_name',
       header: 'Customer',
+      enableSorting: false,
       cell: (row) =>
         row.customer_name || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'stage',
+      id: 'stage',
       header: 'Stage',
       cell: (row) => <StageBadge stage={row.stage} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'stage',
+        filterPlaceholder: 'All Stages',
+        filterOptions: [
+          { value: 'prospecting', label: 'Prospecting' },
+          { value: 'qualification', label: 'Qualification' },
+          { value: 'proposal', label: 'Proposal' },
+          { value: 'negotiation', label: 'Negotiation' },
+          { value: 'closed_won', label: 'Closed Won' },
+          { value: 'closed_lost', label: 'Closed Lost' },
+        ],
+      },
     },
     {
-      key: 'probability',
+      id: 'probability',
       header: 'Probability',
       cell: (row) => (
         <div className="flex items-center gap-2">
@@ -132,7 +146,7 @@ export default function OpportunitiesPage() {
       ),
     },
     {
-      key: 'expected_revenue',
+      id: 'expected_revenue',
       header: 'Expected Revenue',
       cell: (row) => (
         <span>
@@ -144,7 +158,7 @@ export default function OpportunitiesPage() {
       ),
     },
     {
-      key: 'close_date',
+      id: 'close_date',
       header: 'Close Date',
       cell: (row) =>
         row.close_date ? (
@@ -154,14 +168,14 @@ export default function OpportunitiesPage() {
         ),
     },
     {
-      key: 'status',
+      id: 'status',
       header: 'Status',
       cell: (row) => <StatusBadge status={row.status} />,
     },
   ]
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Opportunities"
         breadcrumbs={[{ label: 'CRM' }, { label: 'Opportunities' }]}
@@ -169,24 +183,8 @@ export default function OpportunitiesPage() {
         createLabel="New Opportunity"
         createIcon={Plus}
       />
-      <FilterBar
-        searchPlaceholder="Search opportunities..."
-        filters={[
-          {
-            key: 'stage',
-            placeholder: 'All Stages',
-            options: [
-              { value: 'prospecting', label: 'Prospecting' },
-              { value: 'qualification', label: 'Qualification' },
-              { value: 'proposal', label: 'Proposal' },
-              { value: 'negotiation', label: 'Negotiation' },
-              { value: 'closed_won', label: 'Closed Won' },
-              { value: 'closed_lost', label: 'Closed Lost' },
-            ],
-          },
-        ]}
-      />
-      <DataTable
+      <AdvancedDataTable
+        title="Opportunities"
         columns={columns}
         data={opportunities}
         pagination={pagination}
@@ -196,6 +194,8 @@ export default function OpportunitiesPage() {
         onDelete={fetchOpportunities}
         emptyMessage="No opportunities found"
         emptyDescription="Create your first opportunity to start tracking your pipeline."
+        searchPlaceholder="Search opportunities..."
+        storageKey="crm-opportunities"
       />
     </div>
   )

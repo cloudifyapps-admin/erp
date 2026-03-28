@@ -1,168 +1,420 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { PageHeader } from '@/components/shared/page-header';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Card } from '@/components/ui/card';
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { User, MapPin, Tag, Info, FileText, Plus, X, Loader2 } from 'lucide-react'
+import api from '@/lib/api'
+import { PageHeader } from '@/components/shared/page-header'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 interface VendorForm {
-  name: string;
-  code: string;
-  email: string;
-  phone: string;
-  website: string;
-  address: string;
-  city: string;
-  country: string;
-  tax_id: string;
-  payment_terms: string;
-  currency: string;
-  status: string;
-  notes: string;
+  name: string
+  code: string
+  email: string
+  phone: string
+  website: string
+  tax_id: string
+  address: string
+  city: string
+  country: string
+  payment_terms: string
+  currency: string
+  status: string
+  notes: string
+}
+
+interface CustomField {
+  id: string
+  key: string
+  value: string
 }
 
 const INITIAL: VendorForm = {
-  name: '', code: '', email: '', phone: '', website: '',
-  address: '', city: '', country: '', tax_id: '',
-  payment_terms: 'net30', currency: 'USD', status: 'active', notes: '',
-};
+  name: '',
+  code: '',
+  email: '',
+  phone: '',
+  website: '',
+  tax_id: '',
+  address: '',
+  city: '',
+  country: '',
+  payment_terms: 'net30',
+  currency: 'USD',
+  status: 'active',
+  notes: '',
+}
+
+/* ── Reusable key-value row ─────────────────────────────────────────── */
+function FormRow({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string
+  required?: boolean
+  error?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="grid grid-cols-[180px_1fr] items-start gap-4 py-3.5 border-b border-border/30 last:border-b-0">
+      <Label className="pt-2.5 text-[13px] font-medium text-muted-foreground leading-tight">
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </Label>
+      <div className="flex flex-col gap-1">
+        {children}
+        {error && <p className="text-[11px] text-destructive">{error}</p>}
+      </div>
+    </div>
+  )
+}
 
 export default function NewVendorPage() {
-  const router = useRouter();
-  const [form, setForm] = useState<VendorForm>(INITIAL);
-  const [saving, setSaving] = useState(false);
+  const router = useRouter()
+  const [form, setForm] = useState<VendorForm>(INITIAL)
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Partial<Record<keyof VendorForm, string>>>({})
+  const [customFields, setCustomFields] = useState<CustomField[]>([])
 
-  const set = (key: keyof VendorForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  const set =
+    (key: keyof VendorForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setForm((f) => ({ ...f, [key]: e.target.value }))
+      setErrors((e) => ({ ...e, [key]: undefined }))
+    }
+
+  const setSelect = (key: keyof VendorForm) => (value: string) => {
+    setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  const addCustomField = () => {
+    setCustomFields((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), key: '', value: '' },
+    ])
+  }
+
+  const updateCustomField = (id: string, field: 'key' | 'value', val: string) => {
+    setCustomFields((prev) =>
+      prev.map((cf) => (cf.id === id ? { ...cf, [field]: val } : cf))
+    )
+  }
+
+  const removeCustomField = (id: string) => {
+    setCustomFields((prev) => prev.filter((cf) => cf.id !== id))
+  }
+
+  const validate = (): boolean => {
+    const errs: Partial<Record<keyof VendorForm, string>> = {}
+    if (!form.name.trim()) errs.name = 'Vendor name is required'
+    if (form.email && !/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Invalid email'
+    setErrors(errs)
+    return Object.keys(errs).length === 0
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name) { toast.error('Vendor name is required'); return; }
-    setSaving(true);
+    e.preventDefault()
+    if (!validate()) return
+    setSaving(true)
     try {
-      await api.post('/purchase/vendors/', form);
-      toast.success('Vendor created successfully');
-      router.push('/purchase/vendors');
+      const customData: Record<string, string> = {}
+      customFields.forEach((cf) => {
+        if (cf.key.trim()) customData[cf.key.trim()] = cf.value
+      })
+      const payload = {
+        ...form,
+        custom_fields: Object.keys(customData).length > 0 ? customData : null,
+      }
+      await api.post('/purchase/vendors/', payload)
+      toast.success('Vendor created successfully')
+      router.push('/purchase/vendors')
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to create vendor';
-      toast.error(msg);
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? 'Failed to create vendor'
+      toast.error(msg)
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-3xl">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="New Vendor"
-        breadcrumbs={[{ label: 'Purchase' }, { label: 'Vendors', href: '/purchase/vendors' }, { label: 'New' }]}
+        breadcrumbs={[
+          { label: 'Purchase' },
+          { label: 'Vendors', href: '/purchase/vendors' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-lg px-4 text-[13px]"
+              onClick={() => router.back()}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="vendor-form"
+              size="sm"
+              className="h-9 rounded-lg px-5 text-[13px] font-semibold shadow-sm"
+              disabled={saving}
+            >
+              {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {saving ? 'Creating...' : 'Create Vendor'}
+            </Button>
+          </div>
+        }
       />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        <Card className="p-6 flex flex-col gap-4">
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Basic Information</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="name">Vendor Name <span className="text-destructive">*</span></Label>
-              <Input id="name" value={form.name} onChange={set('name')} placeholder="Acme Corp" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="code">Vendor Code</Label>
-              <Input id="code" value={form.code} onChange={set('code')} placeholder="VND-001" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={form.email} onChange={set('email')} placeholder="contact@acme.com" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="phone">Phone</Label>
-              <Input id="phone" value={form.phone} onChange={set('phone')} placeholder="+1 555 0100" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="website">Website</Label>
-              <Input id="website" value={form.website} onChange={set('website')} placeholder="https://acme.com" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tax_id">Tax ID</Label>
-              <Input id="tax_id" value={form.tax_id} onChange={set('tax_id')} placeholder="12-3456789" />
-            </div>
-          </div>
-        </Card>
 
-        <Card className="p-6 flex flex-col gap-4">
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Address</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <Label htmlFor="address">Street Address</Label>
-              <Input id="address" value={form.address} onChange={set('address')} placeholder="123 Main St" />
+      <form id="vendor-form" onSubmit={handleSubmit}>
+        <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
+          <Tabs defaultValue="details" className="gap-0">
+            <div className="border-b border-border/40 bg-muted/30 px-6">
+              <TabsList variant="line" className="!h-auto gap-2">
+                <TabsTrigger value="details" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <User className="h-[18px] w-[18px]" />
+                  Details
+                </TabsTrigger>
+                <TabsTrigger value="address" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <MapPin className="h-[18px] w-[18px]" />
+                  Address
+                </TabsTrigger>
+                <TabsTrigger value="commercial" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Tag className="h-[18px] w-[18px]" />
+                  Commercial Terms
+                </TabsTrigger>
+                <TabsTrigger value="additional" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Info className="h-[18px] w-[18px]" />
+                  Additional Information
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <FileText className="h-[18px] w-[18px]" />
+                  Notes
+                </TabsTrigger>
+              </TabsList>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="city">City</Label>
-              <Input id="city" value={form.city} onChange={set('city')} placeholder="New York" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="country">Country</Label>
-              <Input id="country" value={form.country} onChange={set('country')} placeholder="US" />
-            </div>
-          </div>
-        </Card>
 
-        <Card className="p-6 flex flex-col gap-4">
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Commercial Terms</h2>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label>Payment Terms</Label>
-              <Select value={form.payment_terms} onValueChange={(v) => setForm((f) => ({ ...f, payment_terms: v }))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="immediate">Immediate</SelectItem>
-                  <SelectItem value="net15">Net 15</SelectItem>
-                  <SelectItem value="net30">Net 30</SelectItem>
-                  <SelectItem value="net60">Net 60</SelectItem>
-                  <SelectItem value="net90">Net 90</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Currency</Label>
-              <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="EUR">EUR</SelectItem>
-                  <SelectItem value="GBP">GBP</SelectItem>
-                  <SelectItem value="INR">INR</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Status</Label>
-              <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" value={form.notes} onChange={set('notes')} rows={3} placeholder="Internal notes about this vendor..." />
-          </div>
-        </Card>
+            {/* Tab: Details */}
+            <TabsContent value="details" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Vendor Name" required error={errors.name}>
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={set('name')}
+                  placeholder="Acme Corp"
+                  aria-invalid={!!errors.name}
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Vendor Code">
+                <Input
+                  id="code"
+                  value={form.code}
+                  onChange={set('code')}
+                  placeholder="VND-001"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Email" error={errors.email}>
+                <Input
+                  id="email"
+                  type="email"
+                  value={form.email}
+                  onChange={set('email')}
+                  placeholder="contact@acme.com"
+                  aria-invalid={!!errors.email}
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Phone">
+                <Input
+                  id="phone"
+                  value={form.phone}
+                  onChange={set('phone')}
+                  placeholder="+1 555 0100"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Website">
+                <Input
+                  id="website"
+                  value={form.website}
+                  onChange={set('website')}
+                  placeholder="https://acme.com"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Tax ID">
+                <Input
+                  id="tax_id"
+                  value={form.tax_id}
+                  onChange={set('tax_id')}
+                  placeholder="12-3456789"
+                  className="h-10"
+                />
+              </FormRow>
+            </TabsContent>
 
-        <div className="flex justify-end gap-3">
-          <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-          <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create Vendor'}</Button>
+            {/* Tab: Address */}
+            <TabsContent value="address" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Street Address">
+                <Input
+                  id="address"
+                  value={form.address}
+                  onChange={set('address')}
+                  placeholder="123 Main St"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="City">
+                <Input
+                  id="city"
+                  value={form.city}
+                  onChange={set('city')}
+                  placeholder="New York"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Country">
+                <Input
+                  id="country"
+                  value={form.country}
+                  onChange={set('country')}
+                  placeholder="US"
+                  className="h-10"
+                />
+              </FormRow>
+            </TabsContent>
+
+            {/* Tab: Commercial Terms */}
+            <TabsContent value="commercial" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Payment Terms">
+                <Select value={form.payment_terms} onValueChange={setSelect('payment_terms')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="immediate">Immediate</SelectItem>
+                    <SelectItem value="net15">Net 15</SelectItem>
+                    <SelectItem value="net30">Net 30</SelectItem>
+                    <SelectItem value="net60">Net 60</SelectItem>
+                    <SelectItem value="net90">Net 90</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Currency">
+                <Select value={form.currency} onValueChange={setSelect('currency')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="GBP">GBP</SelectItem>
+                    <SelectItem value="INR">INR</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Status">
+                <Select value={form.status} onValueChange={setSelect('status')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+            </TabsContent>
+
+            {/* Tab: Additional Information — with dynamic custom fields */}
+            <TabsContent value="additional" className="p-6 lg:px-8 lg:py-2">
+              {/* Dynamic custom key-value fields */}
+              <div className="pt-5 pb-2 flex items-center justify-between">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground/70">Custom Fields</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-lg px-3 text-[12px] gap-1.5"
+                  onClick={addCustomField}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Field
+                </Button>
+              </div>
+
+              {customFields.length === 0 && (
+                <div className="py-6 text-center border border-dashed border-border/50 rounded-lg">
+                  <p className="text-[13px] text-muted-foreground">No custom fields added yet.</p>
+                  <p className="text-[12px] text-muted-foreground/60 mt-1">Click &quot;Add Field&quot; to add custom key-value data.</p>
+                </div>
+              )}
+
+              {customFields.map((cf) => (
+                <div
+                  key={cf.id}
+                  className="grid grid-cols-[180px_1fr_36px] items-center gap-4 py-3 border-b border-border/30 last:border-b-0"
+                >
+                  <Input
+                    value={cf.key}
+                    onChange={(e) => updateCustomField(cf.id, 'key', e.target.value)}
+                    placeholder="Field name"
+                    className="h-10 text-[13px] font-medium text-muted-foreground"
+                  />
+                  <Input
+                    value={cf.value}
+                    onChange={(e) => updateCustomField(cf.id, 'value', e.target.value)}
+                    placeholder="Value"
+                    className="h-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeCustomField(cf.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </TabsContent>
+
+            {/* Tab: Notes */}
+            <TabsContent value="notes" className="p-6 lg:p-8">
+              <Textarea
+                value={form.notes}
+                onChange={set('notes')}
+                placeholder="Internal notes about this vendor..."
+                rows={10}
+                className="resize-none"
+              />
+            </TabsContent>
+          </Tabs>
         </div>
       </form>
     </div>
-  );
+  )
 }

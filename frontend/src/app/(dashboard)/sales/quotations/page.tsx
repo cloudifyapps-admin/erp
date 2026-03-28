@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 import api from '@/lib/api'
 import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
-import { DataTable, type ColumnDef } from '@/components/shared/data-table'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
 import { StatusBadge } from '@/components/shared/status-badge'
-import { FilterBar } from '@/components/shared/filter-bar'
 
 interface Quotation {
   id: string
@@ -24,15 +26,8 @@ interface Quotation {
   created_at: string
 }
 
-interface PaginatedResponse {
-  items: Quotation[]
-  count: number
-  page: number
-  per_page: number
-  pages: number
-}
-
 export default function QuotationsPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,12 +35,15 @@ export default function QuotationsPage() {
     page: 1,
     per_page: 25,
     total: 0,
-    total_pages: 1,
+    pages: 1,
   })
 
   const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
   const search = searchParams.get('search') ?? ''
   const status = searchParams.get('status') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
 
   const fetchQuotations = useCallback(async () => {
     setLoading(true)
@@ -53,9 +51,11 @@ export default function QuotationsPage() {
       const { data: raw } = await api.get('/sales/quotations', {
         params: {
           page,
-          per_page: 25,
+          per_page: perPage,
           ...(search && { search }),
           ...(status && { status }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
         },
       })
       const normalized = normalizePaginated<Quotation>(raw)
@@ -64,96 +64,104 @@ export default function QuotationsPage() {
         page: normalized.page,
         per_page: normalized.per_page,
         total: normalized.total,
-        total_pages: normalized.pages,
+        pages: normalized.pages,
       })
     } catch {
       toast.error('Failed to load quotations')
     } finally {
       setLoading(false)
     }
-  }, [page, search, status])
+  }, [page, perPage, search, status, sortBy, sortDirection])
 
   useEffect(() => {
     fetchQuotations()
   }, [fetchQuotations])
 
-  const columns: ColumnDef<Quotation>[] = [
+  const columns: ServerColumnDef<Quotation>[] = [
     {
-      key: 'number',
+      id: 'number',
       header: 'Number',
       cell: (row) => (
-        <span className="font-mono text-sm font-medium">{row.number}</span>
+        <span className="font-bold font-mono">{row.number}</span>
       ),
     },
     {
-      key: 'customer_name',
+      id: 'customer_name',
       header: 'Customer',
       cell: (row) =>
         row.customer_name || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'status',
+      id: 'status',
       header: 'Status',
       cell: (row) => <StatusBadge status={row.status} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'status',
+        filterPlaceholder: 'All Statuses',
+        filterOptions: [
+          { value: 'draft', label: 'Draft' },
+          { value: 'sent', label: 'Sent' },
+          { value: 'accepted', label: 'Accepted' },
+          { value: 'rejected', label: 'Rejected' },
+          { value: 'expired', label: 'Expired' },
+          { value: 'converted', label: 'Converted' },
+        ],
+      },
     },
     {
-      key: 'subtotal',
+      id: 'subtotal',
       header: 'Subtotal',
       cell: (row) => (
         <span className="tabular-nums">
-          {row.currency || 'USD'}{' '}
           {Number(row.subtotal ?? 0).toLocaleString(undefined, {
             minimumFractionDigits: 2,
-          })}
+          })}{' '}
+          {row.currency}
         </span>
       ),
     },
     {
-      key: 'tax_total',
+      id: 'tax_total',
       header: 'Tax',
       cell: (row) => (
         <span className="tabular-nums text-muted-foreground">
-          {row.currency || 'USD'}{' '}
           {Number(row.tax_total ?? 0).toLocaleString(undefined, {
             minimumFractionDigits: 2,
-          })}
+          })}{' '}
+          {row.currency}
         </span>
       ),
     },
     {
-      key: 'total',
+      id: 'total',
       header: 'Total',
       cell: (row) => (
         <span className="tabular-nums font-semibold">
-          {row.currency || 'USD'}{' '}
           {Number(row.total ?? 0).toLocaleString(undefined, {
             minimumFractionDigits: 2,
-          })}
+          })}{' '}
+          {row.currency}
         </span>
       ),
     },
     {
-      key: 'valid_until',
+      id: 'valid_until',
       header: 'Valid Until',
-      cell: (row) =>
-        row.valid_until ? (
-          <span
-            className={
-              new Date(row.valid_until) < new Date()
-                ? 'text-orange-600'
-                : 'text-muted-foreground'
-            }
-          >
+      cell: (row) => {
+        if (!row.valid_until) return <span className="text-muted-foreground">—</span>
+        const isExpired = new Date(row.valid_until) < new Date()
+        return (
+          <span className={isExpired ? 'text-orange-600' : ''}>
             {new Date(row.valid_until).toLocaleDateString()}
           </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
+        )
+      },
     },
   ]
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Quotations"
         breadcrumbs={[{ label: 'Sales' }, { label: 'Quotations' }]}
@@ -161,24 +169,8 @@ export default function QuotationsPage() {
         createLabel="New Quotation"
         createIcon={Plus}
       />
-      <FilterBar
-        searchPlaceholder="Search quotations..."
-        filters={[
-          {
-            key: 'status',
-            placeholder: 'All Statuses',
-            options: [
-              { value: 'draft', label: 'Draft' },
-              { value: 'sent', label: 'Sent' },
-              { value: 'accepted', label: 'Accepted' },
-              { value: 'rejected', label: 'Rejected' },
-              { value: 'expired', label: 'Expired' },
-              { value: 'converted', label: 'Converted' },
-            ],
-          },
-        ]}
-      />
-      <DataTable
+      <AdvancedDataTable
+        title="Quotations"
         columns={columns}
         data={quotations}
         pagination={pagination}
@@ -188,6 +180,8 @@ export default function QuotationsPage() {
         onDelete={fetchQuotations}
         emptyMessage="No quotations found"
         emptyDescription="Create your first quotation to get started."
+        searchPlaceholder="Search quotations..."
+        storageKey="sales-quotations"
       />
     </div>
   )

@@ -1,26 +1,29 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { normalizePaginated } from '@/lib/api-helpers';
-import { PageHeader } from '@/components/shared/page-header';
-import { DataTable } from '@/components/shared/data-table';
-import { StatusBadge } from '@/components/shared/status-badge';
-import { format } from 'date-fns';
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
+import { Plus } from 'lucide-react'
+import api from '@/lib/api'
+import { normalizePaginated } from '@/lib/api-helpers'
+import { PageHeader } from '@/components/shared/page-header'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
+import { StatusBadge } from '@/components/shared/status-badge'
 
 interface Ticket {
-  id: string;
-  number: string;
-  title: string;
-  priority: string;
-  status: string;
-  category: string;
-  assignee_name: string;
-  requester_name: string;
-  created_at: string;
-  updated_at: string;
+  id: string
+  number: string
+  title: string
+  priority: string
+  status: string
+  category: string
+  assignee_name: string
+  requester_name: string
+  created_at: string
+  updated_at: string
 }
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
@@ -29,112 +32,156 @@ const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
   high: { bg: 'bg-orange-100', text: 'text-orange-700' },
   critical: { bg: 'bg-red-100', text: 'text-red-700' },
   urgent: { bg: 'bg-red-100', text: 'text-red-700' },
-};
+}
 
 export default function TicketsPage() {
-  const router = useRouter();
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [loading, setLoading] = useState(true)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    per_page: 25,
+    total: 0,
+    pages: 1,
+  })
+
+  const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
+  const search = searchParams.get('search') ?? ''
+  const status = searchParams.get('status') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
+    setLoading(true)
     try {
       const { data: raw } = await api.get('/tickets', {
-        params: { page: pagination.page, page_size: pagination.pageSize, search, status: statusFilter || undefined },
-      });
-      const normalized = normalizePaginated<Ticket>(raw);
-      setTickets(normalized.items);
-      setPagination((p) => ({ ...p, total: normalized.total }));
+        params: {
+          page,
+          per_page: perPage,
+          ...(search && { search }),
+          ...(status && { status }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
+        },
+      })
+      const normalized = normalizePaginated<Ticket>(raw)
+      setTickets(normalized.items)
+      setPagination({
+        page: normalized.page,
+        per_page: normalized.per_page,
+        total: normalized.total,
+        pages: normalized.pages,
+      })
     } catch {
-      toast.error('Failed to load tickets');
+      toast.error('Failed to load tickets')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [pagination.page, pagination.pageSize, search, statusFilter]);
+  }, [page, perPage, search, status, sortBy, sortDirection])
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
-  const columns = [
+  const columns: ServerColumnDef<Ticket>[] = [
     {
-      key: 'number',
-      label: '#',
-      render: (t: Ticket) => (
-        <button
-          className="font-mono text-sm font-medium text-primary hover:underline"
-          onClick={() => router.push(`/tickets/${t.id}`)}
-        >
-          {t.number}
-        </button>
+      id: 'number',
+      header: '#',
+      cell: (row) => (
+        <span className="font-mono font-medium text-primary">{row.number}</span>
       ),
     },
     {
-      key: 'title',
-      label: 'Title',
-      render: (t: Ticket) => (
-        <button
-          className="text-left text-sm hover:underline font-medium max-w-xs truncate block"
-          onClick={() => router.push(`/tickets/${t.id}`)}
-        >
-          {t.title}
-        </button>
+      id: 'title',
+      header: 'Title',
+      cell: (row) => (
+        <span className="font-medium truncate max-w-xs block">{row.title}</span>
       ),
     },
     {
-      key: 'priority',
-      label: 'Priority',
-      render: (t: Ticket) => {
-        const style = PRIORITY_STYLES[t.priority] ?? { bg: 'bg-gray-100', text: 'text-gray-700' };
+      id: 'priority',
+      header: 'Priority',
+      cell: (row) => {
+        const style = PRIORITY_STYLES[row.priority] ?? { bg: 'bg-gray-100', text: 'text-gray-700' }
         return (
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${style.bg} ${style.text}`}>
-            {t.priority}
+            {row.priority}
           </span>
-        );
+        )
       },
     },
     {
-      key: 'status',
-      label: 'Status',
-      render: (t: Ticket) => <StatusBadge status={t.status} />,
+      id: 'status',
+      header: 'Status',
+      cell: (row) => <StatusBadge status={row.status} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'status',
+        filterPlaceholder: 'All Statuses',
+        filterOptions: [
+          { value: 'open', label: 'Open' },
+          { value: 'in_progress', label: 'In Progress' },
+          { value: 'pending', label: 'Pending' },
+          { value: 'resolved', label: 'Resolved' },
+          { value: 'closed', label: 'Closed' },
+        ],
+      },
     },
-    { key: 'category', label: 'Category', render: (t: Ticket) => <span className="capitalize text-sm">{t.category?.replace('_', ' ') ?? '—'}</span> },
-    { key: 'assignee_name', label: 'Assignee', render: (t: Ticket) => t.assignee_name ?? 'Unassigned' },
-    { key: 'requester_name', label: 'Requester' },
     {
-      key: 'created_at',
-      label: 'Created',
-      render: (t: Ticket) => format(new Date(t.created_at), 'MMM d, yyyy'),
+      id: 'category',
+      header: 'Category',
+      cell: (row) => (
+        <span className="capitalize">{row.category?.replace('_', ' ') ?? '—'}</span>
+      ),
     },
-  ];
-
-  const filterOptions = [
-    { label: 'All Statuses', value: '' },
-    { label: 'Open', value: 'open' },
-    { label: 'In Progress', value: 'in_progress' },
-    { label: 'Pending', value: 'pending' },
-    { label: 'Resolved', value: 'resolved' },
-    { label: 'Closed', value: 'closed' },
-  ];
+    {
+      id: 'assignee_name',
+      header: 'Assignee',
+      enableSorting: false,
+      cell: (row) =>
+        row.assignee_name || <span className="text-muted-foreground">Unassigned</span>,
+    },
+    {
+      id: 'requester_name',
+      header: 'Requester',
+      cell: (row) =>
+        row.requester_name || <span className="text-muted-foreground">—</span>,
+    },
+    {
+      id: 'created_at',
+      header: 'Created',
+      cell: (row) =>
+        row.created_at
+          ? new Date(row.created_at).toLocaleDateString()
+          : '—',
+    },
+  ]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Tickets"
         breadcrumbs={[{ label: 'Support' }, { label: 'Tickets' }]}
         createHref="/tickets/new"
+        createLabel="New Ticket"
+        createIcon={Plus}
       />
-      <DataTable
+      <AdvancedDataTable
+        title="Tickets"
         columns={columns}
         data={tickets}
+        pagination={pagination}
         loading={loading}
-        pagination={{ ...pagination, onPageChange: (p) => setPagination((prev) => ({ ...prev, page: p })) }}
-        onSearch={(q) => { setSearch(q); setPagination((p) => ({ ...p, page: 1 })); }}
-        onFilter={(val) => { setStatusFilter(val); setPagination((p) => ({ ...p, page: 1 })); }}
-        filterOptions={filterOptions}
-        filterLabel="Status"
+        editBasePath="/tickets"
+        deleteEndpoint="/tickets"
+        onDelete={fetchData}
+        emptyMessage="No tickets found"
+        emptyDescription="Create your first ticket to get started."
+        searchPlaceholder="Search tickets..."
+        storageKey="tickets"
       />
     </div>
-  );
+  )
 }

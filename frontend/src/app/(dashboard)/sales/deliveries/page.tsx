@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus } from 'lucide-react'
 import api from '@/lib/api'
 import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
-import { DataTable, type ColumnDef } from '@/components/shared/data-table'
+import {
+  AdvancedDataTable,
+  type ServerColumnDef,
+} from '@/components/shared/advanced-data-table'
 import { StatusBadge } from '@/components/shared/status-badge'
-import { FilterBar } from '@/components/shared/filter-bar'
 
 interface Delivery {
   id: string
@@ -24,15 +26,8 @@ interface Delivery {
   created_at: string
 }
 
-interface PaginatedResponse {
-  items: Delivery[]
-  count: number
-  page: number
-  per_page: number
-  pages: number
-}
-
 export default function DeliveriesPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,12 +35,15 @@ export default function DeliveriesPage() {
     page: 1,
     per_page: 25,
     total: 0,
-    total_pages: 1,
+    pages: 1,
   })
 
   const page = Number(searchParams.get('page') ?? 1)
+  const perPage = Number(searchParams.get('per_page') ?? 25)
   const search = searchParams.get('search') ?? ''
   const status = searchParams.get('status') ?? ''
+  const sortBy = searchParams.get('sort_by') ?? ''
+  const sortDirection = searchParams.get('sort_direction') ?? ''
 
   const fetchDeliveries = useCallback(async () => {
     setLoading(true)
@@ -53,9 +51,11 @@ export default function DeliveriesPage() {
       const { data: raw } = await api.get('/sales/deliveries', {
         params: {
           page,
-          per_page: 25,
+          per_page: perPage,
           ...(search && { search }),
           ...(status && { status }),
+          ...(sortBy && { sort_by: sortBy }),
+          ...(sortDirection && { sort_direction: sortDirection }),
         },
       })
       const normalized = normalizePaginated<Delivery>(raw)
@@ -64,30 +64,31 @@ export default function DeliveriesPage() {
         page: normalized.page,
         per_page: normalized.per_page,
         total: normalized.total,
-        total_pages: normalized.pages,
+        pages: normalized.pages,
       })
     } catch {
       toast.error('Failed to load deliveries')
     } finally {
       setLoading(false)
     }
-  }, [page, search, status])
+  }, [page, perPage, search, status, sortBy, sortDirection])
 
   useEffect(() => {
     fetchDeliveries()
   }, [fetchDeliveries])
 
-  const columns: ColumnDef<Delivery>[] = [
+  const columns: ServerColumnDef<Delivery>[] = [
     {
-      key: 'number',
+      id: 'number',
       header: 'Delivery No.',
       cell: (row) => (
-        <span className="font-mono text-sm font-medium">{row.number}</span>
+        <span className="font-bold font-mono">{row.number}</span>
       ),
     },
     {
-      key: 'sales_order_number',
+      id: 'sales_order_number',
       header: 'Sales Order',
+      enableSorting: false,
       cell: (row) =>
         row.sales_order_number ? (
           <span className="font-mono text-xs">{row.sales_order_number}</span>
@@ -96,50 +97,61 @@ export default function DeliveriesPage() {
         ),
     },
     {
-      key: 'customer_name',
+      id: 'customer_name',
       header: 'Customer',
       cell: (row) =>
         row.customer_name || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'status',
+      id: 'status',
       header: 'Status',
       cell: (row) => <StatusBadge status={row.status} />,
+      meta: {
+        filterType: 'select',
+        filterKey: 'status',
+        filterPlaceholder: 'All Statuses',
+        filterOptions: [
+          { value: 'pending', label: 'Pending' },
+          { value: 'processing', label: 'Processing' },
+          { value: 'shipped', label: 'Shipped' },
+          { value: 'delivered', label: 'Delivered' },
+          { value: 'cancelled', label: 'Cancelled' },
+        ],
+      },
     },
     {
-      key: 'scheduled_date',
-      header: 'Scheduled',
-      cell: (row) =>
-        row.scheduled_date ? (
-          <span
-            className={
-              !row.delivered_date && new Date(row.scheduled_date) < new Date()
-                ? 'text-orange-600'
-                : ''
-            }
-          >
+      id: 'scheduled_date',
+      header: 'Scheduled Date',
+      cell: (row) => {
+        if (!row.scheduled_date) return <span className="text-muted-foreground">—</span>
+        const isOverdue =
+          new Date(row.scheduled_date) < new Date() && row.status !== 'delivered'
+        return (
+          <span className={isOverdue ? 'text-orange-600' : ''}>
             {new Date(row.scheduled_date).toLocaleDateString()}
           </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
+        )
+      },
     },
     {
-      key: 'delivered_date',
-      header: 'Delivered',
+      id: 'delivered_date',
+      header: 'Delivered Date',
       cell: (row) =>
         row.delivered_date
           ? new Date(row.delivered_date).toLocaleDateString()
           : <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'carrier',
+      id: 'carrier',
       header: 'Carrier',
-      cell: (row) => row.carrier || <span className="text-muted-foreground">—</span>,
+      enableSorting: false,
+      cell: (row) =>
+        row.carrier || <span className="text-muted-foreground">—</span>,
     },
     {
-      key: 'tracking_number',
-      header: 'Tracking',
+      id: 'tracking_number',
+      header: 'Tracking No.',
+      enableSorting: false,
       cell: (row) =>
         row.tracking_number ? (
           <span className="font-mono text-xs">{row.tracking_number}</span>
@@ -150,7 +162,7 @@ export default function DeliveriesPage() {
   ]
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Deliveries"
         breadcrumbs={[{ label: 'Sales' }, { label: 'Deliveries' }]}
@@ -158,23 +170,8 @@ export default function DeliveriesPage() {
         createLabel="New Delivery"
         createIcon={Plus}
       />
-      <FilterBar
-        searchPlaceholder="Search deliveries..."
-        filters={[
-          {
-            key: 'status',
-            placeholder: 'All Statuses',
-            options: [
-              { value: 'pending', label: 'Pending' },
-              { value: 'processing', label: 'Processing' },
-              { value: 'shipped', label: 'Shipped' },
-              { value: 'delivered', label: 'Delivered' },
-              { value: 'cancelled', label: 'Cancelled' },
-            ],
-          },
-        ]}
-      />
-      <DataTable
+      <AdvancedDataTable
+        title="Deliveries"
         columns={columns}
         data={deliveries}
         pagination={pagination}
@@ -183,7 +180,9 @@ export default function DeliveriesPage() {
         deleteEndpoint="/sales/deliveries"
         onDelete={fetchDeliveries}
         emptyMessage="No deliveries found"
-        emptyDescription="Deliveries are created from confirmed sales orders."
+        emptyDescription="Create your first delivery to get started."
+        searchPlaceholder="Search deliveries..."
+        storageKey="sales-deliveries"
       />
     </div>
   )

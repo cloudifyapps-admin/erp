@@ -1,175 +1,403 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { PageHeader } from '@/components/shared/page-header';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Card } from '@/components/ui/card';
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { FolderKanban, DollarSign, Info, Plus, X, Loader2 } from 'lucide-react'
+import api from '@/lib/api'
+import { PageHeader } from '@/components/shared/page-header'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 interface ProjectForm {
-  name: string;
-  code: string;
-  description: string;
-  client_name: string;
-  manager_email: string;
-  start_date: string;
-  end_date: string;
-  budget: string;
-  currency: string;
-  billing_type: string;
-  status: string;
-  priority: string;
+  name: string
+  code: string
+  description: string
+  client_name: string
+  manager_email: string
+  start_date: string
+  end_date: string
+  budget: string
+  currency: string
+  billing_type: string
+  status: string
+  priority: string
+}
+
+interface CustomField {
+  id: string
+  key: string
+  value: string
 }
 
 const INITIAL: ProjectForm = {
-  name: '', code: '', description: '', client_name: '', manager_email: '',
-  start_date: new Date().toISOString().split('T')[0], end_date: '',
-  budget: '', currency: 'USD', billing_type: 'fixed', status: 'planning', priority: 'medium',
-};
+  name: '',
+  code: '',
+  description: '',
+  client_name: '',
+  manager_email: '',
+  start_date: new Date().toISOString().split('T')[0],
+  end_date: '',
+  budget: '',
+  currency: 'USD',
+  billing_type: 'fixed',
+  status: 'planning',
+  priority: 'medium',
+}
+
+/* ── Reusable key-value row ─────────────────────────────────────────── */
+function FormRow({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string
+  required?: boolean
+  error?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="grid grid-cols-[180px_1fr] items-start gap-4 py-3.5 border-b border-border/30 last:border-b-0">
+      <Label className="pt-2.5 text-[13px] font-medium text-muted-foreground leading-tight">
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </Label>
+      <div className="flex flex-col gap-1">
+        {children}
+        {error && <p className="text-[11px] text-destructive">{error}</p>}
+      </div>
+    </div>
+  )
+}
 
 export default function NewProjectPage() {
-  const router = useRouter();
-  const [form, setForm] = useState<ProjectForm>(INITIAL);
-  const [saving, setSaving] = useState(false);
+  const router = useRouter()
+  const [form, setForm] = useState<ProjectForm>(INITIAL)
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Partial<Record<keyof ProjectForm, string>>>({})
+  const [customFields, setCustomFields] = useState<CustomField[]>([])
 
-  const set = (key: keyof ProjectForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  const set =
+    (key: keyof ProjectForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setForm((f) => ({ ...f, [key]: e.target.value }))
+      setErrors((prev) => ({ ...prev, [key]: undefined }))
+    }
+
+  const setSelect = (key: keyof ProjectForm) => (value: string) => {
+    setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  const addCustomField = () => {
+    setCustomFields((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), key: '', value: '' },
+    ])
+  }
+
+  const updateCustomField = (id: string, field: 'key' | 'value', val: string) => {
+    setCustomFields((prev) =>
+      prev.map((cf) => (cf.id === id ? { ...cf, [field]: val } : cf))
+    )
+  }
+
+  const removeCustomField = (id: string) => {
+    setCustomFields((prev) => prev.filter((cf) => cf.id !== id))
+  }
+
+  const validate = (): boolean => {
+    const errs: Partial<Record<keyof ProjectForm, string>> = {}
+    if (!form.name.trim()) errs.name = 'Project name is required'
+    setErrors(errs)
+    return Object.keys(errs).length === 0
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name) { toast.error('Project name is required'); return; }
-    setSaving(true);
+    e.preventDefault()
+    if (!validate()) return
+    setSaving(true)
     try {
       const { data } = await api.post('/projects', {
         name: form.name,
         code: form.code || null,
         description: form.description || null,
+        client_name: form.client_name || null,
+        manager_email: form.manager_email || null,
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         budget: form.budget ? parseFloat(form.budget) : null,
+        currency: form.currency || null,
+        billing_type: form.billing_type || null,
         status: form.status,
-      });
-      toast.success('Project created');
-      router.push(`/projects/${data.id}`);
+        priority: form.priority,
+      })
+      toast.success('Project created')
+      router.push(`/projects/${data.id}`)
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to create project';
-      toast.error(msg);
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? 'Failed to create project'
+      toast.error(msg)
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-3xl">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="New Project"
-        breadcrumbs={[{ label: 'Projects', href: '/projects' }, { label: 'New' }]}
+        breadcrumbs={[{ label: 'Projects', href: '/projects' }]}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-lg px-4 text-[13px]"
+              onClick={() => router.back()}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="project-form"
+              size="sm"
+              className="h-9 rounded-lg px-5 text-[13px] font-semibold shadow-sm"
+              disabled={saving}
+            >
+              {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {saving ? 'Creating...' : 'Create Project'}
+            </Button>
+          </div>
+        }
       />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        <Card className="p-6 flex flex-col gap-4">
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Project Details</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <Label htmlFor="name">Project Name <span className="text-destructive">*</span></Label>
-              <Input id="name" value={form.name} onChange={set('name')} placeholder="Website Redesign" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="code">Project Code</Label>
-              <Input id="code" value={form.code} onChange={set('code')} placeholder="PRJ-001" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="client_name">Client</Label>
-              <Input id="client_name" value={form.client_name} onChange={set('client_name')} placeholder="Acme Corp" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Priority</Label>
-              <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Status</Label>
-              <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="planning">Planning</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="on_hold">On Hold</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <Label htmlFor="description">Description</Label>
-              <Textarea id="description" value={form.description} onChange={set('description')} rows={3} />
-            </div>
-          </div>
-        </Card>
 
-        <Card className="p-6 flex flex-col gap-4">
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Timeline</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="start_date">Start Date</Label>
-              <Input id="start_date" type="date" value={form.start_date} onChange={set('start_date')} />
+      <form id="project-form" onSubmit={handleSubmit}>
+        <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
+          <Tabs defaultValue="details" className="gap-0">
+            <div className="border-b border-border/40 bg-muted/30 px-6">
+              <TabsList variant="line" className="!h-auto gap-2">
+                <TabsTrigger value="details" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <FolderKanban className="h-[18px] w-[18px]" />
+                  Details
+                </TabsTrigger>
+                <TabsTrigger value="timeline" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <DollarSign className="h-[18px] w-[18px]" />
+                  Timeline &amp; Budget
+                </TabsTrigger>
+                <TabsTrigger value="additional" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Info className="h-[18px] w-[18px]" />
+                  Additional Information
+                </TabsTrigger>
+              </TabsList>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="end_date">End Date</Label>
-              <Input id="end_date" type="date" value={form.end_date} onChange={set('end_date')} />
-            </div>
-          </div>
-        </Card>
 
-        <Card className="p-6 flex flex-col gap-4">
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Budget</h2>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="budget">Budget</Label>
-              <Input id="budget" type="number" min="0" step="0.01" value={form.budget} onChange={set('budget')} placeholder="0.00" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Currency</Label>
-              <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="EUR">EUR</SelectItem>
-                  <SelectItem value="GBP">GBP</SelectItem>
-                  <SelectItem value="INR">INR</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Billing Type</Label>
-              <Select value={form.billing_type} onValueChange={(v) => setForm((f) => ({ ...f, billing_type: v }))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fixed">Fixed Price</SelectItem>
-                  <SelectItem value="time_material">Time & Material</SelectItem>
-                  <SelectItem value="retainer">Retainer</SelectItem>
-                  <SelectItem value="internal">Internal</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </Card>
+            {/* Tab: Details */}
+            <TabsContent value="details" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Project Name" required error={errors.name}>
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={set('name')}
+                  placeholder="Website Redesign"
+                  aria-invalid={!!errors.name}
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Project Code">
+                <Input
+                  id="code"
+                  value={form.code}
+                  onChange={set('code')}
+                  placeholder="PRJ-001"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Client">
+                <Input
+                  id="client_name"
+                  value={form.client_name}
+                  onChange={set('client_name')}
+                  placeholder="Acme Corp"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Manager Email">
+                <Input
+                  id="manager_email"
+                  type="email"
+                  value={form.manager_email}
+                  onChange={set('manager_email')}
+                  placeholder="manager@example.com"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Priority">
+                <Select value={form.priority} onValueChange={setSelect('priority')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Status">
+                <Select value={form.status} onValueChange={setSelect('status')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="planning">Planning</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="on_hold">On Hold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Description">
+                <Textarea
+                  id="description"
+                  value={form.description}
+                  onChange={set('description')}
+                  placeholder="Describe the project scope and objectives..."
+                  rows={3}
+                  className="resize-none"
+                />
+              </FormRow>
+            </TabsContent>
 
-        <div className="flex justify-end gap-3">
-          <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-          <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create Project'}</Button>
+            {/* Tab: Timeline & Budget */}
+            <TabsContent value="timeline" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Start Date">
+                <Input
+                  id="start_date"
+                  type="date"
+                  value={form.start_date}
+                  onChange={set('start_date')}
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="End Date">
+                <Input
+                  id="end_date"
+                  type="date"
+                  value={form.end_date}
+                  onChange={set('end_date')}
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Budget">
+                <Input
+                  id="budget"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.budget}
+                  onChange={set('budget')}
+                  placeholder="0.00"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Currency">
+                <Select value={form.currency} onValueChange={setSelect('currency')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="GBP">GBP</SelectItem>
+                    <SelectItem value="INR">INR</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Billing Type">
+                <Select value={form.billing_type} onValueChange={setSelect('billing_type')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixed">Fixed Price</SelectItem>
+                    <SelectItem value="time_material">Time &amp; Material</SelectItem>
+                    <SelectItem value="retainer">Retainer</SelectItem>
+                    <SelectItem value="internal">Internal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormRow>
+            </TabsContent>
+
+            {/* Tab: Additional Information */}
+            <TabsContent value="additional" className="p-6 lg:px-8 lg:py-2">
+              {/* Dynamic custom key-value fields */}
+              <div className="pt-5 pb-2 flex items-center justify-between">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground/70">Custom Fields</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-lg px-3 text-[12px] gap-1.5"
+                  onClick={addCustomField}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Field
+                </Button>
+              </div>
+
+              {customFields.length === 0 && (
+                <div className="py-6 text-center border border-dashed border-border/50 rounded-lg">
+                  <p className="text-[13px] text-muted-foreground">No custom fields added yet.</p>
+                  <p className="text-[12px] text-muted-foreground/60 mt-1">Click &quot;Add Field&quot; to add custom key-value data.</p>
+                </div>
+              )}
+
+              {customFields.map((cf) => (
+                <div
+                  key={cf.id}
+                  className="grid grid-cols-[180px_1fr_36px] items-center gap-4 py-3 border-b border-border/30 last:border-b-0"
+                >
+                  <Input
+                    value={cf.key}
+                    onChange={(e) => updateCustomField(cf.id, 'key', e.target.value)}
+                    placeholder="Field name"
+                    className="h-10 text-[13px] font-medium text-muted-foreground"
+                  />
+                  <Input
+                    value={cf.value}
+                    onChange={(e) => updateCustomField(cf.id, 'value', e.target.value)}
+                    placeholder="Value"
+                    className="h-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeCustomField(cf.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </TabsContent>
+          </Tabs>
         </div>
       </form>
     </div>
-  );
+  )
 }

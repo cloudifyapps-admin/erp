@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LayoutDashboard, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,9 +52,7 @@ export default function RegisterPage() {
   return (
     <Card className="w-full max-w-sm shadow-lg">
       <CardHeader className="items-center text-center pb-2">
-        <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-blue-600 text-white">
-          <LayoutDashboard className="size-5" />
-        </div>
+        <img src="/logo.png" alt="Cloudifyapps ERP" className="mx-auto mb-1 h-12 object-contain" />
         <CardTitle className="text-xl">Create your account</CardTitle>
         <CardDescription>Get started with Cloudifyapps ERP</CardDescription>
       </CardHeader>

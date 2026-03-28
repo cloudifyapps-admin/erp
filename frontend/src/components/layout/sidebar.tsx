@@ -1,12 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
-  UserCheck,
   UserCircle,
   TrendingUp,
   CalendarDays,
@@ -26,7 +24,6 @@ import {
   CheckSquare,
   Flag,
   Clock,
-  Briefcase,
   Building,
   UserCog,
   CalendarOff,
@@ -39,13 +36,17 @@ import {
   Settings,
   Users2,
   Shield,
-  ChevronDown,
-  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface NavItem {
   label: string;
@@ -53,16 +54,24 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
-interface NavSection {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
+interface NavGroup {
+  category: string;
   items: NavItem[];
 }
 
-const navSections: NavSection[] = [
+// ---------------------------------------------------------------------------
+// Navigation data — grouped by category like the Spherule reference
+// ---------------------------------------------------------------------------
+
+const navGroups: NavGroup[] = [
   {
-    label: 'CRM',
-    icon: UserCheck,
+    category: 'MAIN',
+    items: [
+      { label: 'Dashboard', href: '/', icon: LayoutDashboard },
+    ],
+  },
+  {
+    category: 'CRM',
     items: [
       { label: 'Leads', href: '/crm/leads', icon: TrendingUp },
       { label: 'Contacts', href: '/crm/contacts', icon: UserCircle },
@@ -72,8 +81,7 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: 'Sales',
-    icon: ShoppingCart,
+    category: 'SALES',
     items: [
       { label: 'Quotations', href: '/sales/quotations', icon: FileText },
       { label: 'Sales Orders', href: '/sales/sales-orders', icon: ShoppingCart },
@@ -82,8 +90,7 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: 'Purchase',
-    icon: ClipboardList,
+    category: 'PURCHASE',
     items: [
       { label: 'Vendors', href: '/purchase/vendors', icon: Building2 },
       { label: 'Purchase Requests', href: '/purchase/purchase-requests', icon: ClipboardList },
@@ -92,20 +99,18 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: 'Inventory',
-    icon: Package,
+    category: 'INVENTORY',
     items: [
       { label: 'Products', href: '/inventory/products', icon: Package },
       { label: 'Warehouses', href: '/inventory/warehouses', icon: Warehouse },
       { label: 'Stock Levels', href: '/inventory/stock-levels', icon: BarChart3 },
       { label: 'Stock Movements', href: '/inventory/stock-movements', icon: ArrowLeftRight },
-      { label: 'Stock Adjustments', href: '/inventory/stock-adjustments', icon: SlidersHorizontal },
-      { label: 'Stock Transfers', href: '/inventory/stock-transfers', icon: Truck },
+      { label: 'Adjustments', href: '/inventory/stock-adjustments', icon: SlidersHorizontal },
+      { label: 'Transfers', href: '/inventory/stock-transfers', icon: Truck },
     ],
   },
   {
-    label: 'Projects',
-    icon: FolderKanban,
+    category: 'PROJECTS',
     items: [
       { label: 'All Projects', href: '/projects', icon: FolderKanban },
       { label: 'Tasks', href: '/projects/tasks', icon: CheckSquare },
@@ -114,93 +119,40 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: 'HR',
-    icon: Briefcase,
+    category: 'HR & PEOPLE',
     items: [
       { label: 'Employees', href: '/hr/employees', icon: Users },
       { label: 'Departments', href: '/hr/departments', icon: Building },
       { label: 'Attendance', href: '/hr/attendance', icon: UserCog },
       { label: 'Leave Requests', href: '/hr/leave-requests', icon: CalendarOff },
-      { label: 'Holiday Lists', href: '/hr/holiday-lists', icon: CalendarCheck },
+      { label: 'Holidays', href: '/hr/holiday-lists', icon: CalendarCheck },
       { label: 'Payroll', href: '/hr/payroll', icon: DollarSign },
-      { label: 'Performance Reviews', href: '/hr/performance-reviews', icon: Star },
-      { label: 'Expense Claims', href: '/hr/expense-claims', icon: CreditCard },
+      { label: 'Reviews', href: '/hr/performance-reviews', icon: Star },
+      { label: 'Expenses', href: '/hr/expense-claims', icon: CreditCard },
     ],
   },
   {
-    label: 'Settings',
-    icon: Settings,
+    category: 'OTHER',
+    items: [
+      { label: 'Documents', href: '/documents', icon: Folder },
+      { label: 'Tickets', href: '/tickets', icon: Ticket },
+    ],
+  },
+  {
+    category: 'SETUP',
     items: [
       { label: 'Organization', href: '/settings/organization', icon: Building2 },
       { label: 'Master Data', href: '/settings/master-data', icon: Folder },
       { label: 'Team Members', href: '/settings/team-members', icon: Users2 },
-      { label: 'Team Roles', href: '/settings/team-roles', icon: Shield },
+      { label: 'Roles & Permissions', href: '/settings/team-roles', icon: Shield },
+      { label: 'Settings', href: '/settings', icon: Settings },
     ],
   },
 ];
 
-const topLevelItems: NavItem[] = [
-  { label: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { label: 'Documents', href: '/documents', icon: Folder },
-  { label: 'Tickets', href: '/tickets', icon: Ticket },
-];
-
-function SidebarSection({
-  section,
-  pathname,
-}: {
-  section: NavSection;
-  pathname: string;
-}) {
-  const isActive = section.items.some((item) => pathname.startsWith(item.href));
-  const [open, setOpen] = useState(isActive);
-  const SectionIcon = section.icon;
-
-  return (
-    <div>
-      <button
-        onClick={() => setOpen((prev) => !prev)}
-        className={cn(
-          'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-          'text-slate-300 hover:bg-slate-800 hover:text-white',
-          isActive && 'text-white'
-        )}
-      >
-        <SectionIcon className="size-4 shrink-0 text-slate-400" />
-        <span className="flex-1 text-left">{section.label}</span>
-        {open ? (
-          <ChevronDown className="size-3.5 shrink-0 text-slate-500" />
-        ) : (
-          <ChevronRight className="size-3.5 shrink-0 text-slate-500" />
-        )}
-      </button>
-
-      {open && (
-        <div className="mt-0.5 ml-3 border-l border-slate-700/60 pl-3">
-          {section.items.map((item) => {
-            const ItemIcon = item.icon;
-            const active = pathname === item.href || pathname.startsWith(item.href + '/');
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
-                  active
-                    ? 'bg-blue-600/20 text-blue-400 font-medium'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                )}
-              >
-                <ItemIcon className={cn('size-3.5 shrink-0', active ? 'text-blue-400' : 'text-slate-500')} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+// ---------------------------------------------------------------------------
+// Sidebar component
+// ---------------------------------------------------------------------------
 
 interface SidebarProps {
   isOpen: boolean;
@@ -212,79 +164,132 @@ export function Sidebar({ isOpen }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'flex h-screen flex-col bg-slate-900 transition-all duration-300',
-        isOpen ? 'w-64' : 'w-0 overflow-hidden'
+        'flex h-screen flex-col border-r border-border/60 bg-sidebar transition-all duration-300 shrink-0',
+        isOpen ? 'w-[248px]' : 'w-[68px]'
       )}
     >
-      {/* Logo / Brand */}
-      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-700/60 px-4">
-        <div className="flex size-7 items-center justify-center rounded-md bg-blue-600 text-white">
-          <LayoutDashboard className="size-4" />
-        </div>
-        <span className="text-sm font-semibold text-white leading-tight">
-          Cloudifyapps ERP
-        </span>
+      {/* ---- Logo / Brand ---- */}
+      <div className={cn(
+        'flex h-[60px] shrink-0 items-center border-b border-border/40',
+        isOpen ? 'px-5 gap-3' : 'justify-center px-0'
+      )}>
+        {isOpen ? (
+          <img src="/logo.png" alt="Cloudifyapps ERP" className="h-9 object-contain" />
+        ) : (
+          <img src="/icon.png" alt="Cloudifyapps" className="size-8 object-contain shrink-0" />
+        )}
       </div>
 
-      {/* Navigation */}
-      <ScrollArea className="flex-1 overflow-hidden">
-        <nav className="flex flex-col gap-1 p-3">
-          {/* Top-level items */}
-          {topLevelItems.slice(0, 1).map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  active
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                )}
-              >
-                <Icon className="size-4 shrink-0" />
-                {item.label}
-              </Link>
-            );
-          })}
+      {/* ---- Navigation ---- */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+        <nav className={cn(
+          'flex flex-col gap-0.5 py-4',
+          isOpen ? 'px-3' : 'px-2'
+        )}>
+          {navGroups.map((group) => (
+            <div key={group.category} className="mt-4 first:mt-0">
+              {/* Category header — hidden in collapsed mode */}
+              {group.category !== 'MAIN' && isOpen && (
+                <p className="mb-1.5 px-3 text-[0.65rem] font-bold uppercase tracking-[0.1em] text-muted-foreground/60">
+                  {group.category}
+                </p>
+              )}
 
-          <Separator className="my-1 bg-slate-700/60" />
+              {/* Divider for collapsed mode between groups */}
+              {group.category !== 'MAIN' && !isOpen && (
+                <div className="mb-2 mt-1 mx-2 border-t border-border/40" />
+              )}
 
-          {/* Sections */}
-          {navSections.map((section) => (
-            <SidebarSection key={section.label} section={section} pathname={pathname} />
+              {/* Items */}
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isExact = pathname === item.href;
+                  const isNested = pathname.startsWith(item.href + '/');
+                  const active = item.href === '/' ? isExact : (isExact || isNested);
+
+                  // Collapsed: icon-only with tooltip
+                  if (!isOpen) {
+                    return (
+                      <Tooltip key={item.href} delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <Link
+                            href={item.href}
+                            className={cn(
+                              'group flex items-center justify-center rounded-lg p-2 transition-all duration-150 cursor-pointer',
+                              active
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                            )}
+                          >
+                            <Icon
+                              className={cn(
+                                'size-[18px] shrink-0 transition-colors',
+                                active
+                                  ? 'text-primary-foreground'
+                                  : 'text-muted-foreground/70 group-hover:text-accent-foreground'
+                              )}
+                            />
+                          </Link>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" sideOffset={8}>
+                          {item.label}
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  }
+
+                  // Expanded: full label
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'group flex items-center gap-2.5 rounded-lg px-3 py-[7px] text-[0.8rem] font-medium transition-all duration-150 cursor-pointer',
+                        active
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-foreground/65 hover:bg-accent hover:text-foreground'
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          'size-[16px] shrink-0 transition-colors',
+                          active
+                            ? 'text-primary-foreground'
+                            : 'text-muted-foreground/70 group-hover:text-accent-foreground'
+                        )}
+                      />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           ))}
-
-          <Separator className="my-1 bg-slate-700/60" />
-
-          {/* Documents & Tickets */}
-          {topLevelItems.slice(1).map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href || pathname.startsWith(item.href + '/');
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  active
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                )}
-              >
-                <Icon className="size-4 shrink-0" />
-                {item.label}
-              </Link>
-            );
-          })}
         </nav>
-      </ScrollArea>
+      </div>
 
-      {/* Footer hint */}
-      <div className="shrink-0 border-t border-slate-700/60 p-3">
-        <p className="text-center text-xs text-slate-600">v1.0.0</p>
+      {/* ---- Footer ---- */}
+      <div className={cn(
+        'shrink-0 border-t border-border/40 py-3',
+        isOpen ? 'px-5' : 'px-2 flex justify-center'
+      )}>
+        {isOpen ? (
+          <p className="text-[11px] text-muted-foreground/50">
+            Powered by <span className="font-medium text-muted-foreground/70">Cloudifyapps</span>
+          </p>
+        ) : (
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <div className="flex size-8 items-center justify-center rounded-lg cursor-default">
+                <img src="/icon.png" alt="Cloudifyapps" className="size-5 object-contain opacity-50" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              Cloudifyapps ERP
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </aside>
   );
