@@ -35,16 +35,21 @@ import { toast } from 'sonner'
 
 export type ColumnDef<T> = {
   key: string
-  header: string
+  header?: string
+  label?: string
   cell?: (row: T) => React.ReactNode
+  render?: (row: T) => React.ReactNode
   className?: string
 }
 
 type PaginationMeta = {
   page: number
-  per_page: number
+  per_page?: number
+  pageSize?: number
   total: number
-  pages: number
+  pages?: number
+  total_pages?: number
+  onPageChange?: (page: number) => void
 }
 
 type DataTableProps<T extends { id: string | number }> = {
@@ -58,6 +63,7 @@ type DataTableProps<T extends { id: string | number }> = {
   emptyMessage?: string
   emptyDescription?: string
   additionalActions?: (row: T) => React.ReactNode
+  onSearch?: (query: string) => void
 }
 
 function TableSkeleton({ columns }: { columns: number }) {
@@ -127,7 +133,7 @@ export function DataTable<T extends { id: string | number }>({
             <TableRow className="hover:bg-transparent bg-muted/30">
               {columns.map((col) => (
                 <TableHead key={col.key} className={cn('text-[0.75rem] font-semibold text-muted-foreground uppercase tracking-wide', col.className)}>
-                  {col.header}
+                  {col.header ?? col.label}
                 </TableHead>
               ))}
               {(editBasePath || deleteEndpoint || additionalActions) && (
@@ -155,8 +161,8 @@ export function DataTable<T extends { id: string | number }>({
                 <TableRow key={row.id}>
                   {columns.map((col) => (
                     <TableCell key={col.key} className={col.className}>
-                      {col.cell
-                        ? col.cell(row)
+                      {(col.cell ?? col.render)
+                        ? (col.cell ?? col.render)!(row)
                         : String((row as Record<string, unknown>)[col.key] ?? '')}
                     </TableCell>
                   ))}
@@ -202,11 +208,11 @@ export function DataTable<T extends { id: string | number }>({
         </Table>
       </div>
 
-      {pagination && pagination.total_pages > 1 && (
+      {pagination && (pagination.total_pages ?? pagination.pages ?? 1) > 1 && (
         <div className="flex items-center justify-between px-1">
           <p className="text-[0.75rem] font-medium text-muted-foreground">
-            Showing {(currentPage - 1) * pagination.per_page + 1}–
-            {Math.min(currentPage * pagination.per_page, pagination.total)} of{' '}
+            Showing {(currentPage - 1) * (pagination.per_page ?? pagination.pageSize ?? 10) + 1}–
+            {Math.min(currentPage * (pagination.per_page ?? pagination.pageSize ?? 10), pagination.total)} of{' '}
             {pagination.total} records
           </p>
           <div className="flex items-center gap-1">

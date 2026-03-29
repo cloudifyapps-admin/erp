@@ -9,9 +9,18 @@ interface User {
   profile_photo_path: string | null;
 }
 
+interface TenantInfo {
+  id: number;
+  name: string;
+  role: string;
+  is_owner: boolean;
+  is_current: boolean;
+}
+
 interface AuthState {
   user: User | null;
   tenant: any | null;
+  tenants: TenantInfo[];
   permissions: string[];
   role: string | null;
   isAuthenticated: boolean;
@@ -20,12 +29,15 @@ interface AuthState {
   register: (name: string, email: string, password: string, companyName?: string) => Promise<void>;
   logout: () => void;
   fetchMe: () => Promise<void>;
+  fetchTenants: () => Promise<void>;
+  switchTenant: (tenantId: number) => Promise<void>;
   hasPermission: (resource: string, action: string) => boolean;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   tenant: null,
+  tenants: [],
   permissions: [],
   role: null,
   isAuthenticated: false,
@@ -37,6 +49,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.setItem('refresh_token', res.data.refresh_token);
     set({ isAuthenticated: true });
     await get().fetchMe();
+    await get().fetchTenants();
   },
 
   register: async (name, email, password, companyName) => {
@@ -45,12 +58,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.setItem('refresh_token', res.data.refresh_token);
     set({ isAuthenticated: true });
     await get().fetchMe();
+    await get().fetchTenants();
   },
 
   logout: () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
-    set({ user: null, tenant: null, permissions: [], role: null, isAuthenticated: false });
+    set({ user: null, tenant: null, tenants: [], permissions: [], role: null, isAuthenticated: false });
     window.location.href = '/login';
   },
 
@@ -67,6 +81,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     } catch {
       set({ isAuthenticated: false, isLoading: false });
+    }
+  },
+
+  fetchTenants: async () => {
+    try {
+      const res = await api.get('/auth/my-tenants');
+      set({ tenants: res.data });
+    } catch {
+      set({ tenants: [] });
+    }
+  },
+
+  switchTenant: async (tenantId: number) => {
+    try {
+      await api.post('/auth/switch-tenant', { tenant_id: tenantId });
+      // Re-fetch user data for the new tenant context
+      await get().fetchMe();
+      await get().fetchTenants();
+      // Reload the page to reset all cached data
+      window.location.href = '/';
+    } catch {
+      throw new Error('Failed to switch organization');
     }
   },
 

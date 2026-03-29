@@ -89,7 +89,7 @@ export default function TicketDetailPage() {
 
   useEffect(() => {
     api.get('/settings/team-members', { params: { page_size: 200 } })
-      .then(({ data }) => setTeamMembers(normalizePaginated(data).items))
+      .then(({ data }) => setTeamMembers(normalizePaginated<TeamMember>(data).items))
       .catch(() => {});
   }, []);
 

@@ -7,6 +7,7 @@ from app.models.tenant_models import (
     TicketStatus, TicketPriority, TicketCategory, DocumentCategory,
     Salutation, LeaveType,
     Industry, CustomerRating, LostReason, Competitor, Territory, Campaign,
+    ProjectCategory, TaskLabel, CostCategory, RiskCategory,
 )
 from app.models.crm import (
     Lead, Contact, Customer, CustomerContact, Opportunity, Activity,
@@ -17,7 +18,15 @@ from app.models.crm import (
 from app.models.sales import Quotation, QuotationItem, SalesOrder, SalesOrderItem, Delivery, DeliveryItem, Invoice, InvoiceItem
 from app.models.purchase import Vendor, PurchaseRequest, PurchaseOrder, PurchaseOrderItem, GoodsReceipt, GoodsReceiptItem
 from app.models.inventory import Product, ProductVariant, Warehouse, StockMovement, StockLevel, StockAdjustment, StockAdjustmentItem, StockTransfer, StockTransferItem
-from app.models.projects import Project, Milestone, Task, TimeLog
+from app.models.projects import (
+    Project, Milestone, Task, TimeLog,
+    TaskDependency, TaskChecklist, TaskLabelAssignment, TaskComment,
+    TaskAttachment, TaskWatcher, ProjectMember, ProjectComment,
+    ProjectAttachment, ProjectTemplate, ProjectPhase, ResourceAllocation,
+    UserSkill, ProjectExpense, ProjectBudgetLine, BillingRate,
+    ProjectInvoice, ProjectRisk, ProjectIssue, ChangeRequest,
+    StatusReport, MeetingNote,
+)
 from app.models.hr import (
     Employee, Department, Designation, Attendance, LeaveRequest,
     HolidayList, Holiday, PayrollStructure, PayrollRun, PayrollSlip,

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { FolderKanban, DollarSign, Info, Plus, X, Loader2 } from 'lucide-react'
 import api from '@/lib/api'
+import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +21,11 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 
+interface ProjectCategory {
+  id: string
+  name: string
+}
+
 interface ProjectForm {
   name: string
   code: string
@@ -33,6 +39,7 @@ interface ProjectForm {
   billing_type: string
   status: string
   priority: string
+  category_id: string
 }
 
 interface CustomField {
@@ -54,6 +61,7 @@ const INITIAL: ProjectForm = {
   billing_type: 'fixed',
   status: 'planning',
   priority: 'medium',
+  category_id: '',
 }
 
 /* -- Reusable key-value row ------------------------------------------------ */
@@ -94,6 +102,18 @@ export default function EditProjectPage({
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof ProjectForm, string>>>({})
   const [customFields, setCustomFields] = useState<CustomField[]>([])
+  const [categories, setCategories] = useState<ProjectCategory[]>([])
+
+  // Fetch categories on mount
+  useEffect(() => {
+    api
+      .get('/settings/master-data/project-categories')
+      .then(({ data }) => {
+        const items = normalizePaginated<ProjectCategory>(data).items
+        setCategories(items)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     api
@@ -112,6 +132,7 @@ export default function EditProjectPage({
           billing_type: data.billing_type ?? 'fixed',
           status: data.status ?? 'planning',
           priority: data.priority ?? 'medium',
+          category_id: data.category_id ?? '',
         })
         if (data.custom_fields && typeof data.custom_fields === 'object') {
           const existing = Object.entries(data.custom_fields).map(([key, value]) => ({
@@ -179,6 +200,7 @@ export default function EditProjectPage({
         billing_type: form.billing_type || null,
         status: form.status,
         priority: form.priority,
+        category_id: form.category_id && form.category_id !== '__none__' ? form.category_id : null,
       })
       toast.success('Project updated successfully')
       router.push('/projects')
@@ -292,6 +314,21 @@ export default function EditProjectPage({
                   placeholder="manager@example.com"
                   className="h-10"
                 />
+              </FormRow>
+              <FormRow label="Category">
+                <Select value={form.category_id} onValueChange={setSelect('category_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={String(cat.id)}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FormRow>
               <FormRow label="Priority">
                 <Select value={form.priority} onValueChange={setSelect('priority')}>

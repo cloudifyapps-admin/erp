@@ -15,7 +15,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
-  const { isAuthenticated, isLoading, fetchMe } = useAuthStore();
+  const { isAuthenticated, isLoading, fetchMe, fetchTenants } = useAuthStore();
 
   // Initialize from localStorage (default to true / expanded)
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -35,7 +35,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // On mount, try to restore session from stored token
   useEffect(() => {
-    fetchMe();
+    fetchMe().then(() => fetchTenants());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

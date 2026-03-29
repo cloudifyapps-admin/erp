@@ -170,7 +170,7 @@ export default function EditEmployeePage({
           }))
           setCustomFields(existing)
         }
-        setDepartments(normalizePaginated(deptRes.data).items)
+        setDepartments(normalizePaginated<Department>(deptRes.data).items)
       })
       .catch(() => toast.error('Failed to load employee'))
       .finally(() => setLoadingData(false))

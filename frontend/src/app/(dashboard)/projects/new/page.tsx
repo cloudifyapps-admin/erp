@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { FolderKanban, DollarSign, Info, Plus, X, Loader2 } from 'lucide-react'
+import { FolderKanban, DollarSign, Info, Plus, X, Loader2, LayoutTemplate } from 'lucide-react'
 import api from '@/lib/api'
+import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog'
 
 interface ProjectForm {
   name: string
@@ -32,6 +41,20 @@ interface ProjectForm {
   billing_type: string
   status: string
   priority: string
+  category_id: string
+}
+
+interface ProjectCategory {
+  id: string
+  name: string
+}
+
+interface ProjectTemplate {
+  id: string
+  name: string
+  description?: string
+  task_count: number
+  milestone_count: number
 }
 
 interface CustomField {
@@ -53,6 +76,7 @@ const INITIAL: ProjectForm = {
   billing_type: 'fixed',
   status: 'planning',
   priority: 'medium',
+  category_id: '',
 }
 
 /* ── Reusable key-value row ─────────────────────────────────────────── */
@@ -87,6 +111,55 @@ export default function NewProjectPage() {
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof ProjectForm, string>>>({})
   const [customFields, setCustomFields] = useState<CustomField[]>([])
+  const [categories, setCategories] = useState<ProjectCategory[]>([])
+  const [templates, setTemplates] = useState<ProjectTemplate[]>([])
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [creatingFromTemplate, setCreatingFromTemplate] = useState(false)
+
+  // Fetch categories and templates on mount
+  useEffect(() => {
+    api
+      .get('/settings/master-data/project-categories')
+      .then(({ data }) => {
+        const items = normalizePaginated<ProjectCategory>(data).items
+        setCategories(items)
+      })
+      .catch(() => {})
+    api
+      .get('/projects/templates')
+      .then(({ data }) => {
+        const items = normalizePaginated<ProjectTemplate>(data).items
+        setTemplates(items)
+      })
+      .catch(() => {})
+  }, [])
+
+  const handleCreateFromTemplate = async () => {
+    if (!selectedTemplateId || !form.name.trim()) {
+      toast.error('Please enter a project name first')
+      return
+    }
+    setCreatingFromTemplate(true)
+    try {
+      const { data } = await api.post(`/projects/templates/${selectedTemplateId}/use`, {
+        name: form.name,
+        category_id: form.category_id || null,
+        priority: form.priority,
+        billing_type: form.billing_type,
+      })
+      toast.success('Project created from template')
+      setTemplateDialogOpen(false)
+      router.push(`/projects/${data.id}`)
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        'Failed to create from template'
+      toast.error(msg)
+    } finally {
+      setCreatingFromTemplate(false)
+    }
+  }
 
   const set =
     (key: keyof ProjectForm) =>
@@ -141,6 +214,7 @@ export default function NewProjectPage() {
         billing_type: form.billing_type || null,
         status: form.status,
         priority: form.priority,
+        category_id: form.category_id && form.category_id !== '__none__' ? form.category_id : null,
       })
       toast.success('Project created')
       router.push(`/projects/${data.id}`)
@@ -161,6 +235,19 @@ export default function NewProjectPage() {
         breadcrumbs={[{ label: 'Projects', href: '/projects' }]}
         actions={
           <div className="flex items-center gap-2">
+            {templates.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-lg px-4 text-[13px] gap-1.5"
+                onClick={() => setTemplateDialogOpen(true)}
+                disabled={saving}
+              >
+                <LayoutTemplate className="h-3.5 w-3.5" />
+                From Template
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -244,6 +331,21 @@ export default function NewProjectPage() {
                   placeholder="manager@example.com"
                   className="h-10"
                 />
+              </FormRow>
+              <FormRow label="Category">
+                <Select value={form.category_id} onValueChange={setSelect('category_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={String(cat.id)}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FormRow>
               <FormRow label="Priority">
                 <Select value={form.priority} onValueChange={setSelect('priority')}>
@@ -398,6 +500,56 @@ export default function NewProjectPage() {
           </Tabs>
         </div>
       </form>
+
+      {/* Template picker dialog */}
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create from Template</DialogTitle>
+            <DialogDescription>
+              Select a template to create your project with predefined tasks and milestones.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 max-h-[300px] overflow-y-auto">
+            {templates.map((tpl) => (
+              <div
+                key={tpl.id}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  selectedTemplateId === tpl.id
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border/60 hover:border-primary/30'
+                }`}
+                onClick={() => setSelectedTemplateId(tpl.id)}
+              >
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary mt-0.5">
+                  <LayoutTemplate className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{tpl.name}</p>
+                  {tpl.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                      {tpl.description}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                    <span>{tpl.task_count ?? 0} tasks</span>
+                    <span>{tpl.milestone_count ?? 0} milestones</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)} disabled={creatingFromTemplate}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateFromTemplate} disabled={creatingFromTemplate || !selectedTemplateId}>
+              {creatingFromTemplate && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Create from Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -24,6 +24,7 @@ import {
   XCircle,
   Swords,
   Map,
+  DollarSign,
 } from 'lucide-react';
 
 const MASTER_DATA_TYPES = [
@@ -48,6 +49,10 @@ const MASTER_DATA_TYPES = [
   { value: 'lost-reasons', label: 'Lost Reasons', description: 'Track why opportunities were lost', icon: XCircle, color: 'bg-red-500/10 text-red-600' },
   { value: 'competitors', label: 'Competitors', description: 'Track competitive landscape information', icon: Swords, color: 'bg-orange-500/10 text-orange-600' },
   { value: 'territories', label: 'Territories', description: 'Define geographic or account territories', icon: Map, color: 'bg-teal-500/10 text-teal-600' },
+  { value: 'project-categories', label: 'Project Categories', description: 'Categorize projects by type or department', icon: FolderTree, color: 'bg-emerald-500/10 text-emerald-600' },
+  { value: 'task-labels', label: 'Task Labels', description: 'Label and tag project tasks for filtering', icon: Tag, color: 'bg-violet-500/10 text-violet-600' },
+  { value: 'cost-categories', label: 'Cost Categories', description: 'Classify project costs and expenses', icon: DollarSign, color: 'bg-amber-500/10 text-amber-600' },
+  { value: 'risk-categories', label: 'Risk Categories', description: 'Categorize and track project risks', icon: AlertTriangle, color: 'bg-red-500/10 text-red-600' },
 ];
 
 export default function MasterDataPage() {

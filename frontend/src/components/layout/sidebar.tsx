@@ -24,6 +24,11 @@ import {
   CheckSquare,
   Flag,
   Clock,
+  ListTodo,
+  LayoutTemplate,
+  PieChart,
+  Briefcase,
+  UsersRound,
   Building,
   UserCog,
   CalendarOff,
@@ -115,10 +120,16 @@ const navGroups: NavGroup[] = [
   {
     category: 'PROJECTS',
     items: [
+      { label: 'Dashboard', href: '/projects/dashboard', icon: LayoutDashboard },
       { label: 'All Projects', href: '/projects', icon: FolderKanban },
+      { label: 'My Tasks', href: '/projects/my-tasks', icon: ListTodo },
       { label: 'Tasks', href: '/projects/tasks', icon: CheckSquare },
       { label: 'Milestones', href: '/projects/milestones', icon: Flag },
       { label: 'Time Logs', href: '/projects/time-logs', icon: Clock },
+      { label: 'Portfolio', href: '/projects/portfolio', icon: Briefcase },
+      { label: 'Analytics', href: '/projects/analytics', icon: PieChart },
+      { label: 'Templates', href: '/projects/templates', icon: LayoutTemplate },
+      { label: 'Resources', href: '/projects/resource-planner', icon: UsersRound },
     ],
   },
   {
@@ -142,12 +153,17 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    category: 'TEAM',
+    items: [
+      { label: 'Team Members', href: '/settings/team-members', icon: Users2 },
+      { label: 'Roles & Permissions', href: '/settings/team-roles', icon: Shield },
+    ],
+  },
+  {
     category: 'SETUP',
     items: [
       { label: 'Organization', href: '/settings/organization', icon: Building2 },
       { label: 'Master Data', href: '/settings/master-data', icon: Folder },
-      { label: 'Team Members', href: '/settings/team-members', icon: Users2 },
-      { label: 'Roles & Permissions', href: '/settings/team-roles', icon: Shield },
       { label: 'Settings', href: '/settings', icon: Settings },
     ],
   },
@@ -209,7 +225,13 @@ export function Sidebar({ isOpen }: SidebarProps) {
                   const Icon = item.icon;
                   const isExact = pathname === item.href;
                   const isNested = pathname.startsWith(item.href + '/');
-                  const active = item.href === '/' ? isExact : (isExact || isNested);
+                  // If another sibling nav item would also match via prefix,
+                  // prefer the more specific one (longer href). This prevents
+                  // "/projects" highlighting when on "/projects/dashboard".
+                  const hasSiblingMatch = isNested && group.items.some(
+                    (sibling) => sibling.href !== item.href && (pathname === sibling.href || pathname.startsWith(sibling.href + '/'))
+                  );
+                  const active = item.href === '/' ? isExact : (isExact || (isNested && !hasSiblingMatch));
 
                   // Collapsed: icon-only with tooltip
                   if (!isOpen) {

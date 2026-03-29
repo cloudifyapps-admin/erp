@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, use } from 'react'
+import { useState, useEffect, useCallback, useMemo, use } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import api from '@/lib/api'
 import { normalizePaginated } from '@/lib/api-helpers'
@@ -9,9 +10,26 @@ import { StatusBadge } from '@/components/shared/status-badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
-import { format } from 'date-fns'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import { format, differenceInDays, isPast } from 'date-fns'
 import {
   Plus,
   Clock,
@@ -19,47 +37,49 @@ import {
   AlertCircle,
   Circle,
   Calendar,
-  User2,
   DollarSign,
-  GripVertical,
   Target,
   Timer,
   Pencil,
-  LayoutDashboard,
-  KanbanSquare,
+  Columns3,
   ListChecks,
   Flag,
-  ClipboardList,
+  Users,
+  Layers,
+  MessageSquare,
+  Paperclip,
+  ShieldAlert,
+  AlertTriangle,
+  GitPullRequest,
+  FileText,
+  Loader2,
+  GanttChart as GanttChartIcon,
+  ArrowRight,
+  TrendingUp,
+  BarChart3,
+  Zap,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 /* ── Types ──────────────────────────────────────────────────────────── */
 
 interface Task {
   id: string
   title: string
-  description: string
   status: 'todo' | 'in_progress' | 'review' | 'done'
   priority: string
   assignee_name: string
   due_date: string
   estimated_hours: number
+  description: string
 }
 
 interface Milestone {
-  id: string
+  id: number
   title: string
   due_date: string
   status: string
   progress: number
-}
-
-interface TimeLog {
-  id: string
-  task_title: string
-  user_name: string
-  hours: number
-  description: string
-  logged_at: string
 }
 
 interface Project {
@@ -75,25 +95,29 @@ interface Project {
   start_date: string
   end_date: string
   budget: number
+  actual_cost: number
   currency: string
   total_tasks: number
   completed_tasks: number
   total_hours: number
+  billable_hours: number
+  billing_rate: number
+  category: string
+  tags: string[]
 }
 
 /* ── Constants ──────────────────────────────────────────────────────── */
 
-const KANBAN_COLUMNS: {
+const STATUS_COLUMNS: {
   key: Task['status']
   label: string
-  icon: React.ReactNode
-  color: string
-  bg: string
+  icon: typeof Circle
+  dotColor: string
 }[] = [
-  { key: 'todo', label: 'To Do', icon: <Circle className="size-4" />, color: 'text-slate-600', bg: 'bg-slate-50 dark:bg-slate-900/30' },
-  { key: 'in_progress', label: 'In Progress', icon: <Clock className="size-4" />, color: 'text-blue-600', bg: 'bg-blue-50/60 dark:bg-blue-900/20' },
-  { key: 'review', label: 'Review', icon: <AlertCircle className="size-4" />, color: 'text-orange-600', bg: 'bg-orange-50/60 dark:bg-orange-900/20' },
-  { key: 'done', label: 'Done', icon: <CheckCircle2 className="size-4" />, color: 'text-green-600', bg: 'bg-green-50/60 dark:bg-green-900/20' },
+  { key: 'todo', label: 'To Do', icon: Circle, dotColor: 'bg-slate-400' },
+  { key: 'in_progress', label: 'In Progress', icon: Clock, dotColor: 'bg-blue-500' },
+  { key: 'review', label: 'Review', icon: AlertCircle, dotColor: 'bg-orange-500' },
+  { key: 'done', label: 'Done', icon: CheckCircle2, dotColor: 'bg-green-500' },
 ]
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -103,296 +127,170 @@ const PRIORITY_COLORS: Record<string, string> = {
   critical: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
 }
 
-/* ── Stat Card ──────────────────────────────────────────────────────── */
+const PROJECT_MODULES = [
+  { title: 'Kanban', icon: Columns3, route: 'kanban', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40' },
+  { title: 'Tasks', icon: ListChecks, route: 'tasks', color: 'text-violet-600 bg-violet-50 dark:bg-violet-950/40' },
+  { title: 'Gantt', icon: GanttChartIcon, route: 'gantt', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40' },
+  { title: 'Milestones', icon: Flag, route: 'milestones', color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40' },
+  { title: 'Time Log', icon: Clock, route: 'time-log', color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/40' },
+  { title: 'Team', icon: Users, route: 'team', color: 'text-pink-600 bg-pink-50 dark:bg-pink-950/40' },
+  { title: 'Phases', icon: Layers, route: 'phases', color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40' },
+  { title: 'Activity', icon: MessageSquare, route: 'activity', color: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-950/40' },
+  { title: 'Files', icon: Paperclip, route: 'files', color: 'text-slate-600 bg-slate-50 dark:bg-slate-800/40' },
+  { title: 'Finance', icon: DollarSign, route: 'finance', color: 'text-green-600 bg-green-50 dark:bg-green-950/40' },
+  { title: 'Risks', icon: ShieldAlert, route: 'risks', color: 'text-red-600 bg-red-50 dark:bg-red-950/40' },
+  { title: 'Issues', icon: AlertTriangle, route: 'issues', color: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-950/40' },
+  { title: 'Changes', icon: GitPullRequest, route: 'change-requests', color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/40' },
+  { title: 'Reports', icon: FileText, route: 'reports', color: 'text-teal-600 bg-teal-50 dark:bg-teal-950/40' },
+  { title: 'Meetings', icon: Calendar, route: 'meetings', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/40' },
+]
 
-function StatItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-}) {
-  return (
-    <div className="flex items-center gap-3 px-5 py-3.5">
-      <div className="flex size-9 items-center justify-center rounded-lg bg-muted/60">
-        {icon}
-      </div>
-      <div>
-        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{label}</p>
-        <p className="text-[15px] font-semibold tabular-nums">{value}</p>
-      </div>
-    </div>
-  )
+function formatCurrency(amount: number, currency: string = '$') {
+  return `${currency}${Number(amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
-/* ── Detail Row ─────────────────────────────────────────────────────── */
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[140px_1fr] items-baseline gap-4 py-2.5 border-b border-border/30 last:border-b-0">
-      <span className="text-[13px] text-muted-foreground">{label}</span>
-      <span className="text-[13px] font-medium">{children}</span>
-    </div>
-  )
+function getProgressColor(progress: number): string {
+  if (progress >= 80) return 'bg-green-500'
+  if (progress >= 50) return 'bg-blue-500'
+  if (progress >= 25) return 'bg-orange-500'
+  return 'bg-slate-400'
 }
 
-/* ── Kanban Card ────────────────────────────────────────────────────── */
-
-function KanbanCard({
-  task,
-}: {
-  task: Task
-}) {
-  const [dragging, setDragging] = useState(false)
-
-  return (
-    <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('taskId', task.id)
-        setDragging(true)
-      }}
-      onDragEnd={() => setDragging(false)}
-      className={`group rounded-lg border border-border/60 bg-card p-3.5 shadow-xs cursor-grab active:cursor-grabbing transition-all ${
-        dragging ? 'opacity-40 scale-95' : 'opacity-100'
-      } hover:shadow-sm hover:border-border`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[13px] font-medium leading-snug">{task.title}</p>
-        <GripVertical className="size-3.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5 transition-opacity" />
-      </div>
-      {task.description && (
-        <p className="mt-1.5 text-[11px] text-muted-foreground/70 line-clamp-2 leading-relaxed">
-          {task.description}
-        </p>
-      )}
-      <div className="mt-3 flex items-center gap-2 flex-wrap">
-        {task.priority && (
-          <span
-            className={`text-[10px] font-semibold px-2 py-0.5 rounded-md capitalize ${
-              PRIORITY_COLORS[task.priority] ?? 'bg-gray-100 text-gray-600'
-            }`}
-          >
-            {task.priority}
-          </span>
-        )}
-        {task.due_date && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Calendar className="size-2.5" />
-            {format(new Date(task.due_date), 'MMM d')}
-          </span>
-        )}
-        {task.assignee_name && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground ml-auto">
-            <User2 className="size-2.5" />
-            {task.assignee_name.split(' ')[0]}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/* ── Kanban Column ──────────────────────────────────────────────────── */
-
-function KanbanColumn({
-  column,
-  tasks,
-  onDrop,
-}: {
-  column: (typeof KANBAN_COLUMNS)[0]
-  tasks: Task[]
-  onDrop: (taskId: string, status: Task['status']) => void
-}) {
-  const [dragOver, setDragOver] = useState(false)
-
-  return (
-    <div
-      className={`flex flex-col min-w-[280px] flex-1 rounded-xl border border-border/40 ${column.bg} transition-all ${
-        dragOver ? 'ring-2 ring-primary/20 border-primary/30' : ''
-      }`}
-      onDragOver={(e) => {
-        e.preventDefault()
-        setDragOver(true)
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault()
-        setDragOver(false)
-        const taskId = e.dataTransfer.getData('taskId')
-        if (taskId) onDrop(taskId, column.key)
-      }}
-    >
-      <div className={`flex items-center gap-2 px-4 py-3 border-b border-border/30 ${column.color}`}>
-        {column.icon}
-        <span className="text-[13px] font-semibold">{column.label}</span>
-        <span className="ml-auto text-[11px] text-muted-foreground bg-background/80 rounded-full px-2 py-0.5 border border-border/50 font-medium">
-          {tasks.length}
-        </span>
-      </div>
-      <div className="flex flex-col gap-2.5 p-3 min-h-[100px]">
-        {tasks.map((t) => (
-          <KanbanCard key={t.id} task={t} />
-        ))}
-        {tasks.length === 0 && (
-          <div className="flex items-center justify-center py-8 text-[12px] text-muted-foreground/50">
-            No tasks
-          </div>
-        )}
-      </div>
-    </div>
-  )
+function getStatusColor(status: string): string {
+  const map: Record<string, string> = {
+    planning: 'from-slate-500 to-slate-600',
+    active: 'from-blue-500 to-blue-600',
+    in_progress: 'from-blue-500 to-blue-600',
+    on_hold: 'from-orange-500 to-orange-600',
+    completed: 'from-green-500 to-green-600',
+    cancelled: 'from-red-500 to-red-600',
+  }
+  return map[status] ?? 'from-slate-500 to-slate-600'
 }
 
 /* ── Main Page ──────────────────────────────────────────────────────── */
 
-export default function ProjectDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = use(params)
   const router = useRouter()
 
   const [project, setProject] = useState<Project | null>(null)
+  const [loading, setLoading] = useState(true)
   const [tasks, setTasks] = useState<Task[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
-  const [timeLogs, setTimeLogs] = useState<TimeLog[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('overview')
+
+  // Task creation
+  const [showAddTask, setShowAddTask] = useState(false)
+  const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [newTaskPriority, setNewTaskPriority] = useState('medium')
+  const [newTaskAssignee, setNewTaskAssignee] = useState('')
+  const [newTaskDue, setNewTaskDue] = useState('')
+  const [newTaskEstHours, setNewTaskEstHours] = useState('')
+  const [newTaskDesc, setNewTaskDesc] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const fetchProject = useCallback(async () => {
     try {
       const { data } = await api.get(`/projects/${projectId}`)
       setProject(data)
-    } catch {
-      toast.error('Failed to load project')
-    } finally {
-      setLoading(false)
-    }
+    } catch { toast.error('Failed to load project') } finally { setLoading(false) }
   }, [projectId])
 
   const fetchTasks = useCallback(async () => {
     try {
-      const { data } = await api.get(`/projects/${projectId}/tasks`, {
-        params: { page_size: 200 },
-      })
-      setTasks(normalizePaginated(data).items)
-    } catch {
-      toast.error('Failed to load tasks')
-    }
+      const { data } = await api.get(`/projects/${projectId}/tasks`, { params: { page_size: 200 } })
+      setTasks(normalizePaginated<Task>(data).items)
+    } catch { /* silent */ }
   }, [projectId])
 
   const fetchMilestones = useCallback(async () => {
     try {
-      const { data } = await api.get(`/projects/${projectId}/milestones`, {
-        params: { page_size: 100 },
-      })
-      setMilestones(normalizePaginated(data).items)
-    } catch {}
+      const { data } = await api.get(`/projects/${projectId}/milestones`, { params: { page_size: 10 } })
+      setMilestones(normalizePaginated<Milestone>(data).items)
+    } catch { /* silent */ }
   }, [projectId])
 
-  const fetchTimeLogs = useCallback(async () => {
+  useEffect(() => { fetchProject(); fetchTasks(); fetchMilestones() }, [fetchProject, fetchTasks, fetchMilestones])
+
+  const tasksByStatus = useMemo(() =>
+    STATUS_COLUMNS.reduce((acc, col) => {
+      acc[col.key] = tasks.filter((t) => t.status === col.key)
+      return acc
+    }, {} as Record<Task['status'], Task[]>),
+    [tasks]
+  )
+
+  const recentTasks = useMemo(() => tasks.slice(0, 5), [tasks])
+  const upcomingMilestones = useMemo(() =>
+    milestones
+      .filter((m) => m.status !== 'completed')
+      .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
+      .slice(0, 3),
+    [milestones]
+  )
+
+  const handleAddTask = async () => {
+    if (!newTaskTitle.trim()) return
+    setSubmitting(true)
     try {
-      const { data } = await api.get(`/projects/${projectId}/time-logs`, {
-        params: { page_size: 100 },
+      await api.post(`/projects/${projectId}/tasks`, {
+        title: newTaskTitle, priority: newTaskPriority, status: 'todo',
+        assigned_to: newTaskAssignee ? parseInt(newTaskAssignee) : null,
+        due_date: newTaskDue || null,
+        estimated_hours: newTaskEstHours ? parseFloat(newTaskEstHours) : null,
+        description: newTaskDesc || null,
       })
-      setTimeLogs(normalizePaginated(data).items)
-    } catch {}
-  }, [projectId])
-
-  useEffect(() => {
-    fetchProject()
-    fetchTasks()
-  }, [fetchProject, fetchTasks])
-
-  useEffect(() => {
-    if (activeTab === 'milestones') fetchMilestones()
-    if (activeTab === 'timelog') fetchTimeLogs()
-  }, [activeTab, fetchMilestones, fetchTimeLogs])
-
-  const handleDrop = async (taskId: string, newStatus: Task['status']) => {
-    const prevTasks = tasks
-    setTasks((ts) => ts.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)))
-    try {
-      await api.patch(`/projects/${projectId}/tasks/${taskId}`, { status: newStatus })
-    } catch {
-      setTasks(prevTasks)
-      toast.error('Failed to update task')
-    }
+      toast.success('Task created')
+      setNewTaskTitle(''); setNewTaskPriority('medium'); setNewTaskAssignee(''); setNewTaskDue(''); setNewTaskEstHours(''); setNewTaskDesc('')
+      setShowAddTask(false); fetchTasks()
+    } catch { toast.error('Failed to create task') } finally { setSubmitting(false) }
   }
 
-  /* ── Loading state ──────────────────────────────────────────────── */
+  /* ── Loading ─────────────────────────────────────────────────────── */
   if (loading) {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="mb-4">
-          <Skeleton className="h-4 w-48" />
+      <div className="flex flex-col gap-6">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-36 rounded-2xl" />
+        <div className="grid grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
         </div>
-        <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
-          <div className="p-6 space-y-4">
-            <Skeleton className="h-6 w-64" />
-            <div className="grid grid-cols-4 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-16" />
-              ))}
-            </div>
-            <Skeleton className="h-48" />
-          </div>
-        </div>
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     )
   }
 
-  /* ── Not found ──────────────────────────────────────────────────── */
   if (!project) {
     return (
       <div className="flex flex-col gap-4">
-        <PageHeader
-          title="Project Not Found"
-          breadcrumbs={[{ label: 'Projects', href: '/projects' }]}
-        />
+        <PageHeader title="Project Not Found" breadcrumbs={[{ label: 'Projects', href: '/projects' }]} />
         <div className="flex flex-col items-center justify-center py-20 rounded-xl border border-border/60 bg-card">
-          <p className="text-muted-foreground text-[14px]">This project could not be found.</p>
-          <Button variant="outline" size="sm" className="mt-4 h-9 rounded-lg" onClick={() => router.push('/projects')}>
-            Back to Projects
-          </Button>
+          <p className="text-muted-foreground text-sm">This project could not be found.</p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={() => router.push('/projects')}>Back to Projects</Button>
         </div>
       </div>
     )
   }
 
-  const tasksByStatus = KANBAN_COLUMNS.reduce(
-    (acc, col) => {
-      acc[col.key] = tasks.filter((t) => t.status === col.key)
-      return acc
-    },
-    {} as Record<Task['status'], Task[]>
-  )
+  const totalTasks = project.total_tasks ?? tasks.length
+  const completedTasks = project.completed_tasks ?? tasksByStatus.done?.length ?? 0
+  const daysRemaining = project.end_date ? differenceInDays(new Date(project.end_date), new Date()) : null
+  const isOverdue = project.end_date ? isPast(new Date(project.end_date)) && project.status !== 'completed' : false
+  const budgetUsedPct = project.budget && project.actual_cost ? Math.round((project.actual_cost / project.budget) * 100) : 0
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ── Header ──────────────────────────────────────────────────── */}
+    <div className="flex flex-col gap-6">
+      {/* ── Breadcrumb + Actions ─────────────────────────────────────── */}
       <PageHeader
         title={project.name}
         breadcrumbs={[{ label: 'Projects', href: '/projects' }]}
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 rounded-lg px-4 text-[13px] gap-1.5"
-              onClick={() => router.push(`/projects/${projectId}/edit`)}
-            >
+            <Button variant="outline" size="sm" className="h-9 rounded-lg px-4 text-[13px] gap-1.5" onClick={() => router.push(`/projects/${projectId}/edit`)}>
               <Pencil className="h-3.5 w-3.5" />
               Edit
             </Button>
-            <Button
-              size="sm"
-              className="h-9 rounded-lg px-4 text-[13px] font-semibold shadow-sm gap-1.5"
-            >
+            <Button size="sm" className="h-9 rounded-lg px-4 text-[13px] font-semibold shadow-sm gap-1.5" onClick={() => setShowAddTask(true)}>
               <Plus className="h-3.5 w-3.5" />
               New Task
             </Button>
@@ -400,319 +298,321 @@ export default function ProjectDetailPage({
         }
       />
 
-      {/* ── Main Card ───────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
-        {/* Project meta bar */}
-        <div className="px-6 py-4 border-b border-border/40 flex items-center gap-3 flex-wrap">
-          <Badge variant="outline" className="font-mono text-[11px] px-2 py-0.5">
-            {project.code}
-          </Badge>
-          <StatusBadge status={project.status} />
-          {project.priority && (
-            <span
-              className={`text-[11px] font-semibold px-2 py-0.5 rounded-md capitalize ${
-                PRIORITY_COLORS[project.priority] ?? 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              {project.priority} priority
-            </span>
-          )}
-          {project.client_name && (
-            <span className="text-[12px] text-muted-foreground ml-auto">
-              Client: <span className="font-medium text-foreground">{project.client_name}</span>
-            </span>
-          )}
-        </div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-border/40 divide-x divide-border/40">
-          <StatItem
-            icon={<Target className="size-4 text-primary" />}
-            label="Progress"
-            value={`${project.progress ?? 0}%`}
-          />
-          <StatItem
-            icon={<CheckCircle2 className="size-4 text-green-600" />}
-            label="Tasks"
-            value={`${project.completed_tasks ?? 0} / ${project.total_tasks ?? 0}`}
-          />
-          <StatItem
-            icon={<Timer className="size-4 text-orange-600" />}
-            label="Hours Logged"
-            value={`${(project.total_hours ?? 0).toLocaleString()}h`}
-          />
-          <StatItem
-            icon={<DollarSign className="size-4 text-emerald-600" />}
-            label="Budget"
-            value={
-              project.budget
-                ? `${project.currency ?? '$'} ${Number(project.budget).toLocaleString()}`
-                : '—'
-            }
-          />
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-0">
-          <div className="border-b border-border/40 bg-muted/30 px-6">
-            <TabsList variant="line" className="!h-auto gap-2">
-              <TabsTrigger
-                value="overview"
-                className="gap-2 px-4 py-3.5 text-[13px] cursor-pointer data-active:font-semibold"
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                Overview
-              </TabsTrigger>
-              <TabsTrigger
-                value="kanban"
-                className="gap-2 px-4 py-3.5 text-[13px] cursor-pointer data-active:font-semibold"
-              >
-                <KanbanSquare className="h-4 w-4" />
-                Kanban
-              </TabsTrigger>
-              <TabsTrigger
-                value="tasks"
-                className="gap-2 px-4 py-3.5 text-[13px] cursor-pointer data-active:font-semibold"
-              >
-                <ListChecks className="h-4 w-4" />
-                Tasks
-              </TabsTrigger>
-              <TabsTrigger
-                value="milestones"
-                className="gap-2 px-4 py-3.5 text-[13px] cursor-pointer data-active:font-semibold"
-              >
-                <Flag className="h-4 w-4" />
-                Milestones
-              </TabsTrigger>
-              <TabsTrigger
-                value="timelog"
-                className="gap-2 px-4 py-3.5 text-[13px] cursor-pointer data-active:font-semibold"
-              >
-                <ClipboardList className="h-4 w-4" />
-                Time Log
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          {/* ── Overview ────────────────────────────────────────────── */}
-          <TabsContent value="overview" className="p-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-              {/* Left: Description + Details */}
-              <div className="flex flex-col gap-6">
-                {/* Description */}
-                <div>
-                  <h3 className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3">
-                    Description
-                  </h3>
-                  <p className="text-[13px] text-foreground/80 leading-relaxed">
-                    {project.description || 'No description provided.'}
-                  </p>
-                </div>
-
-                {/* Project Details */}
-                <div>
-                  <h3 className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3">
-                    Details
-                  </h3>
-                  <div className="rounded-lg border border-border/40 px-5 py-1">
-                    <DetailRow label="Manager">{project.manager_name ?? '—'}</DetailRow>
-                    <DetailRow label="Priority">
-                      <span className="capitalize">{project.priority ?? '—'}</span>
-                    </DetailRow>
-                    <DetailRow label="Start Date">
-                      {project.start_date ? format(new Date(project.start_date), 'MMM d, yyyy') : '—'}
-                    </DetailRow>
-                    <DetailRow label="End Date">
-                      {project.end_date ? format(new Date(project.end_date), 'MMM d, yyyy') : '—'}
-                    </DetailRow>
-                    <DetailRow label="Client">{project.client_name ?? '—'}</DetailRow>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right: Progress sidebar */}
-              <div className="flex flex-col gap-6">
-                <div>
-                  <h3 className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3">
-                    Progress
-                  </h3>
-                  <div className="rounded-lg border border-border/40 p-5">
-                    <div className="flex justify-between text-[13px] mb-2">
-                      <span className="text-muted-foreground">Overall</span>
-                      <span className="font-semibold">{project.progress ?? 0}%</span>
-                    </div>
-                    <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all duration-500"
-                        style={{ width: `${project.progress ?? 0}%` }}
-                      />
-                    </div>
-                    <div className="mt-5 flex flex-col gap-2.5">
-                      {KANBAN_COLUMNS.map((col) => (
-                        <div key={col.key} className="flex items-center gap-2.5">
-                          <span className={col.color}>{col.icon}</span>
-                          <span className="text-[12px] text-muted-foreground flex-1">{col.label}</span>
-                          <span className="text-[13px] font-semibold tabular-nums">
-                            {tasksByStatus[col.key]?.length ?? 0}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* ── Kanban ──────────────────────────────────────────────── */}
-          <TabsContent value="kanban" className="p-6">
-            <div className="flex gap-4 overflow-x-auto pb-2">
-              {KANBAN_COLUMNS.map((col) => (
-                <KanbanColumn
-                  key={col.key}
-                  column={col}
-                  tasks={tasksByStatus[col.key] ?? []}
-                  onDrop={handleDrop}
-                />
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* ── Tasks List ──────────────────────────────────────────── */}
-          <TabsContent value="tasks" className="p-6">
-            <div className="rounded-lg border border-border/40 overflow-hidden">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="bg-muted/40 border-b border-border/40">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Task</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Assignee</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Priority</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Due Date</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Est. Hours</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tasks.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="text-center py-16 text-muted-foreground text-[13px]">
-                        No tasks yet. Click &quot;New Task&quot; to get started.
-                      </td>
-                    </tr>
-                  )}
-                  {tasks.map((t) => (
-                    <tr key={t.id} className="border-b border-border/30 last:border-b-0 hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3.5">
-                        <div className="font-medium">{t.title}</div>
-                        {t.description && (
-                          <div className="text-[11px] text-muted-foreground/70 truncate max-w-xs mt-0.5">
-                            {t.description}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-muted-foreground">{t.assignee_name ?? '—'}</td>
-                      <td className="px-4 py-3.5">
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-md capitalize font-semibold ${
-                            PRIORITY_COLORS[t.priority] ?? 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {t.priority}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <StatusBadge status={t.status} />
-                      </td>
-                      <td className="px-4 py-3.5 text-muted-foreground">
-                        {t.due_date ? format(new Date(t.due_date), 'MMM d, yyyy') : '—'}
-                      </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums font-medium">
-                        {t.estimated_hours ?? '—'}h
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </TabsContent>
-
-          {/* ── Milestones ──────────────────────────────────────────── */}
-          <TabsContent value="milestones" className="p-6">
-            <div className="flex flex-col gap-3 max-w-3xl">
-              {milestones.length === 0 && (
-                <div className="py-16 text-center text-[13px] text-muted-foreground rounded-lg border border-dashed border-border/50">
-                  No milestones defined yet.
-                </div>
+      {/* ── Hero Banner ──────────────────────────────────────────────── */}
+      <div className={cn(
+        'relative rounded-2xl overflow-hidden bg-gradient-to-r text-white p-6 lg:p-8',
+        getStatusColor(project.status)
+      )}>
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djJoLTJ2LTJoMnptMC00aDJ2MmgtMnYtMnptLTQgOHYtMmgydjJoLTJ6bTIgMHYyaC0ydi0yaDJ6bTItMTJ2Mmgtdjl2LTJoMnoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-30" />
+        <div className="relative flex flex-col lg:flex-row lg:items-center gap-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] font-mono bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded">{project.code}</span>
+              <span className="text-[11px] bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded capitalize">{project.status.replace('_', ' ')}</span>
+              {project.priority && (
+                <span className="text-[11px] bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded capitalize">{project.priority}</span>
               )}
-              {milestones.map((m) => (
-                <div
-                  key={m.id}
-                  className="flex items-center gap-4 px-5 py-4 rounded-lg border border-border/40 hover:bg-muted/20 transition-colors"
+            </div>
+            <p className="text-white/80 text-[13px] max-w-xl mt-1 line-clamp-2">
+              {project.description || 'No description provided.'}
+            </p>
+            <div className="flex items-center gap-4 mt-3 text-[12px] text-white/70">
+              {project.manager_name && (
+                <span className="flex items-center gap-1"><Users className="h-3 w-3" />{project.manager_name}</span>
+              )}
+              {project.start_date && (
+                <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{format(new Date(project.start_date), 'MMM d, yyyy')}</span>
+              )}
+              {project.client_name && (
+                <span className="flex items-center gap-1"><Target className="h-3 w-3" />{project.client_name}</span>
+              )}
+            </div>
+          </div>
+          {/* Progress ring */}
+          <div className="flex items-center gap-6">
+            <div className="relative flex items-center justify-center w-20 h-20">
+              <svg className="w-20 h-20 transform -rotate-90" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="6" />
+                <circle cx="40" cy="40" r="34" fill="none" stroke="white" strokeWidth="6" strokeLinecap="round"
+                  strokeDasharray={`${(project.progress ?? 0) * 2.136} 213.6`} />
+              </svg>
+              <span className="absolute text-[16px] font-bold">{project.progress ?? 0}%</span>
+            </div>
+            {daysRemaining !== null && (
+              <div className="text-center">
+                <p className={cn("text-[22px] font-bold", isOverdue && "text-red-200")}>{isOverdue ? 'Overdue' : daysRemaining}</p>
+                <p className="text-[11px] text-white/70">{isOverdue ? `by ${Math.abs(daysRemaining)}d` : 'days left'}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Metric Cards ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/40"><ListChecks className="h-4 w-4 text-blue-600" /></div>
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Tasks</span>
+          </div>
+          <p className="text-[22px] font-bold tabular-nums">{completedTasks}<span className="text-[14px] text-muted-foreground font-normal"> / {totalTasks}</span></p>
+          <div className="h-1.5 rounded-full bg-muted mt-2 overflow-hidden">
+            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0}%` }} />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="p-2 rounded-lg bg-orange-50 dark:bg-orange-950/40"><Timer className="h-4 w-4 text-orange-600" /></div>
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Hours Logged</span>
+          </div>
+          <p className="text-[22px] font-bold tabular-nums">{(project.total_hours ?? 0).toLocaleString()}<span className="text-[14px] text-muted-foreground font-normal">h</span></p>
+          {project.billable_hours > 0 && (
+            <p className="text-[11px] text-muted-foreground mt-1">{project.billable_hours}h billable</p>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950/40"><DollarSign className="h-4 w-4 text-green-600" /></div>
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Budget</span>
+          </div>
+          <p className="text-[22px] font-bold tabular-nums">{project.budget ? formatCurrency(project.budget, project.currency ?? '$') : '---'}</p>
+          {project.budget > 0 && project.actual_cost > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className={cn("h-full rounded-full transition-all", budgetUsedPct > 90 ? 'bg-red-500' : 'bg-green-500')} style={{ width: `${Math.min(100, budgetUsedPct)}%` }} />
+              </div>
+              <span className="text-[11px] text-muted-foreground tabular-nums">{budgetUsedPct}%</span>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="p-2 rounded-lg bg-violet-50 dark:bg-violet-950/40"><BarChart3 className="h-4 w-4 text-violet-600" /></div>
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Task Breakdown</span>
+          </div>
+          <div className="flex items-center gap-1 h-3 rounded-full overflow-hidden bg-muted">
+            {STATUS_COLUMNS.map((col) => {
+              const count = tasksByStatus[col.key]?.length ?? 0
+              const pct = totalTasks > 0 ? (count / totalTasks) * 100 : 0
+              return pct > 0 ? <div key={col.key} className={cn("h-full transition-all", col.dotColor)} style={{ width: `${pct}%` }} /> : null
+            })}
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2.5">
+            {STATUS_COLUMNS.map((col) => (
+              <div key={col.key} className="flex items-center gap-1.5">
+                <div className={cn("h-2 w-2 rounded-full", col.dotColor)} />
+                <span className="text-[11px] text-muted-foreground">{col.label}</span>
+                <span className="text-[11px] font-semibold ml-auto tabular-nums">{tasksByStatus[col.key]?.length ?? 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Project Modules ────────────────────────────────────────── */}
+      <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-border/40">
+          <h3 className="text-[13px] font-semibold flex items-center gap-2"><Zap className="h-4 w-4 text-primary" />Project Modules</h3>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-5">
+          {PROJECT_MODULES.map((mod) => (
+            <Link
+              key={mod.route}
+              href={`/projects/${projectId}/${mod.route}`}
+              className="flex flex-col items-center gap-2 py-4 px-2 border-b border-r border-border/20 last:border-r-0 hover:bg-muted/30 transition-all group"
+            >
+              <div className={cn("p-2 rounded-xl transition-all group-hover:scale-110", mod.color)}>
+                <mod.icon className="h-4.5 w-4.5" />
+              </div>
+              <span className="text-[11px] font-medium text-muted-foreground group-hover:text-foreground transition-colors text-center leading-tight">{mod.title}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Recent Tasks + Details + Milestones ──────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6">
+        {/* Recent Tasks */}
+        <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-border/40 flex items-center justify-between">
+            <h3 className="text-[13px] font-semibold flex items-center gap-2"><ListChecks className="h-4 w-4 text-primary" />Recent Tasks</h3>
+            <Link href={`/projects/${projectId}/tasks`} className="text-[11px] text-primary hover:underline font-medium flex items-center gap-1">
+              View All <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="divide-y divide-border/30">
+            {recentTasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
+                <ListChecks className="h-8 w-8 text-muted-foreground/30" />
+                <p className="text-[13px] text-muted-foreground">No tasks yet</p>
+                <Button size="sm" variant="outline" className="mt-1 text-[12px] h-7" onClick={() => setShowAddTask(true)}>
+                  <Plus className="h-3 w-3 mr-1" />Create Task
+                </Button>
+              </div>
+            ) : (
+              recentTasks.map((task) => (
+                <Link
+                  key={task.id}
+                  href={`/projects/${projectId}/tasks`}
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-muted/30 transition-colors"
                 >
-                  <Flag className="size-4 text-muted-foreground/60 shrink-0" />
+                  <div className={cn("h-2 w-2 rounded-full flex-shrink-0", STATUS_COLUMNS.find(c => c.key === task.status)?.dotColor ?? 'bg-slate-400')} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-[13px] font-medium">{m.title}</span>
-                      <StatusBadge status={m.status} />
-                    </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      Due: {m.due_date ? format(new Date(m.due_date), 'MMM d, yyyy') : '—'}
-                    </div>
+                    <p className="text-[13px] font-medium truncate">{task.title}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {task.assignee_name ?? 'Unassigned'}
+                      {task.due_date && ` · Due ${format(new Date(task.due_date), 'MMM d')}`}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3 w-32">
-                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${m.progress ?? 0}%` }}
-                      />
-                    </div>
-                    <span className="text-[12px] text-muted-foreground tabular-nums w-9 text-right font-medium">
-                      {m.progress ?? 0}%
-                    </span>
-                  </div>
-                </div>
+                  <span className={cn(
+                    'text-[10px] px-2 py-0.5 rounded-full font-semibold capitalize flex-shrink-0',
+                    PRIORITY_COLORS[task.priority] ?? 'bg-gray-100 text-gray-600'
+                  )}>
+                    {task.priority}
+                  </span>
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Project Details + Milestones Row ─────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6">
+        {/* Project Details */}
+        <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-border/40">
+            <h3 className="text-[13px] font-semibold flex items-center gap-2"><FileText className="h-4 w-4 text-primary" />Project Details</h3>
+          </div>
+          <div className="px-5 py-1">
+            {[
+              { label: 'Manager', value: project.manager_name },
+              { label: 'Client', value: project.client_name },
+              { label: 'Category', value: project.category },
+              { label: 'Start Date', value: project.start_date ? format(new Date(project.start_date), 'MMM d, yyyy') : null },
+              { label: 'End Date', value: project.end_date ? format(new Date(project.end_date), 'MMM d, yyyy') : null },
+              { label: 'Billing Rate', value: project.billing_rate ? formatCurrency(project.billing_rate, project.currency ?? '$') + '/hr' : null },
+            ].map((item) => (
+              <div key={item.label} className="flex items-center justify-between py-2.5 border-b border-border/30 last:border-b-0">
+                <span className="text-[12px] text-muted-foreground">{item.label}</span>
+                <span className="text-[13px] font-medium">{item.value || '---'}</span>
+              </div>
+            ))}
+          </div>
+          {project.tags && project.tags.length > 0 && (
+            <div className="px-5 py-3 border-t border-border/40 flex flex-wrap gap-1.5">
+              {project.tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="text-[10px]">{tag}</Badge>
               ))}
             </div>
-          </TabsContent>
+          )}
+        </div>
 
-          {/* ── Time Log ────────────────────────────────────────────── */}
-          <TabsContent value="timelog" className="p-6">
-            <div className="rounded-lg border border-border/40 overflow-hidden">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="bg-muted/40 border-b border-border/40">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Task</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Team Member</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Description</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Hours</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {timeLogs.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="text-center py-16 text-muted-foreground text-[13px]">
-                        No time logs recorded yet.
-                      </td>
-                    </tr>
-                  )}
-                  {timeLogs.map((l) => (
-                    <tr key={l.id} className="border-b border-border/30 last:border-b-0 hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3.5 font-medium">{l.task_title}</td>
-                      <td className="px-4 py-3.5 text-muted-foreground">{l.user_name}</td>
-                      <td className="px-4 py-3.5 text-muted-foreground">{l.description ?? '—'}</td>
-                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold">{l.hours}h</td>
-                      <td className="px-4 py-3.5 text-muted-foreground">
-                        {l.logged_at ? format(new Date(l.logged_at), 'MMM d, yyyy') : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </TabsContent>
-        </Tabs>
+        {/* Upcoming Milestones */}
+        <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-border/40 flex items-center justify-between">
+            <h3 className="text-[13px] font-semibold flex items-center gap-2"><Flag className="h-4 w-4 text-primary" />Upcoming Milestones</h3>
+            <Link href={`/projects/${projectId}/milestones`} className="text-[11px] text-primary hover:underline font-medium flex items-center gap-1">
+              View All <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="divide-y divide-border/30">
+            {upcomingMilestones.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
+                <Flag className="h-8 w-8 text-muted-foreground/30" />
+                <p className="text-[13px] text-muted-foreground">No upcoming milestones</p>
+              </div>
+            ) : (
+              upcomingMilestones.map((ms) => {
+                const daysLeft = ms.due_date ? differenceInDays(new Date(ms.due_date), new Date()) : null
+                const overdue = daysLeft !== null && daysLeft < 0
+                return (
+                  <div key={ms.id} className="flex items-center gap-3 px-5 py-3.5">
+                    <div className={cn("p-2 rounded-lg", overdue ? 'bg-red-50 dark:bg-red-950/40' : 'bg-primary/5')}>
+                      <Flag className={cn("h-4 w-4", overdue ? 'text-red-500' : 'text-primary')} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium truncate">{ms.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <StatusBadge status={ms.status} />
+                        {ms.due_date && (
+                          <span className={cn("text-[11px]", overdue ? 'text-red-500 font-medium' : 'text-muted-foreground')}>
+                            {overdue ? `${Math.abs(daysLeft!)}d overdue` : `${daysLeft}d remaining`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="w-14 text-right">
+                      <span className="text-[12px] font-semibold tabular-nums">{ms.progress}%</span>
+                      <div className="h-1 rounded-full bg-muted mt-1 overflow-hidden">
+                        <div className={cn("h-full rounded-full", getProgressColor(ms.progress))} style={{ width: `${ms.progress}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* ── Add Task Dialog ──────────────────────────────────────────── */}
+      <Dialog open={showAddTask} onOpenChange={setShowAddTask}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New Task</DialogTitle>
+            <DialogDescription>Add a new task to this project.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div>
+              <Label className="text-[13px]">Title *</Label>
+              <Input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="Task title" className="mt-1" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[13px]">Priority</Label>
+                <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[13px]">Due Date</Label>
+                <Input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} className="mt-1" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[13px]">Assignee (User ID)</Label>
+                <Input type="number" value={newTaskAssignee} onChange={(e) => setNewTaskAssignee(e.target.value)} placeholder="User ID" className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-[13px]">Est. Hours</Label>
+                <Input type="number" step="0.5" value={newTaskEstHours} onChange={(e) => setNewTaskEstHours(e.target.value)} placeholder="0" className="mt-1" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-[13px]">Description</Label>
+              <Textarea value={newTaskDesc} onChange={(e) => setNewTaskDesc(e.target.value)} placeholder="Optional description" rows={2} className="mt-1 resize-none" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddTask(false)} disabled={submitting}>Cancel</Button>
+            <Button onClick={handleAddTask} disabled={submitting || !newTaskTitle.trim()}>
+              {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Create Task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

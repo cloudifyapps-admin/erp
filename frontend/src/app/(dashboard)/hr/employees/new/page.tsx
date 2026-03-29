@@ -125,7 +125,7 @@ export default function NewEmployeePage() {
   useEffect(() => {
     api
       .get('/hr/departments', { params: { page_size: 200 } })
-      .then(({ data }) => setDepartments(normalizePaginated(data).items))
+      .then(({ data }) => setDepartments(normalizePaginated<Department>(data).items))
       .catch(() => {})
   }, [])
 

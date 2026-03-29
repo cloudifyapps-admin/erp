@@ -274,6 +274,36 @@ async def get_me(
     )
 
 
+@router.get("/my-tenants")
+async def list_my_tenants(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all tenants/organizations the current user belongs to."""
+    result = await db.execute(
+        select(
+            Tenant.id,
+            Tenant.name,
+            Tenant.owner_id,
+            TenantUser.role,
+        )
+        .join(TenantUser, TenantUser.tenant_id == Tenant.id)
+        .where(TenantUser.user_id == user.id, TenantUser.is_active == True)
+        .order_by(Tenant.name)
+    )
+    rows = result.all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "role": r.role,
+            "is_owner": r.owner_id == user.id,
+            "is_current": r.id == user.current_tenant_id,
+        }
+        for r in rows
+    ]
+
+
 @router.post("/switch-tenant")
 async def switch_tenant(
     data: SwitchTenantRequest,
@@ -291,7 +321,7 @@ async def switch_tenant(
         raise HTTPException(status_code=403, detail="Not a member of this tenant")
 
     user.current_tenant_id = data.tenant_id
-    await db.flush()
+    await db.commit()
     return {"message": "Tenant switched", "tenant_id": data.tenant_id}
 
 

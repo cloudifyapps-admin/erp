@@ -95,7 +95,7 @@ export default function NewPurchaseOrderPage() {
 
   useEffect(() => {
     api.get('/purchase/vendors', { params: { status: 'active', page_size: 200 } })
-      .then(({ data }) => setVendors(normalizePaginated(data).items))
+      .then(({ data }) => setVendors(normalizePaginated<Vendor>(data).items))
       .catch(() => {})
   }, [])
 

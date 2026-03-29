@@ -103,7 +103,7 @@ export default function EditPurchaseOrderPage({
   useEffect(() => {
     const loadVendors = api
       .get('/purchase/vendors', { params: { status: 'active', page_size: 200 } })
-      .then(({ data }) => setVendors(normalizePaginated(data).items))
+      .then(({ data }) => setVendors(normalizePaginated<Vendor>(data).items))
       .catch(() => {})
 
     const loadPO = api

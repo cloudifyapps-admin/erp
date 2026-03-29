@@ -31,6 +31,7 @@ class TenantUser(TimestampMixin, Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(50), nullable=False, default="employee")
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "user_id", name="uq_tenant_user"),

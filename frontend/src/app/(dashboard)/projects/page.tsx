@@ -167,9 +167,11 @@ export default function ProjectsPage() {
         data={projects}
         pagination={pagination}
         loading={loading}
+        viewBasePath="/projects"
         editBasePath="/projects"
         deleteEndpoint="/projects"
         onDelete={fetchData}
+        onRowClick={(row) => router.push(`/projects/${row.id}`)}
         emptyMessage="No projects found"
         emptyDescription="Create your first project to get started."
         searchPlaceholder="Search projects..."

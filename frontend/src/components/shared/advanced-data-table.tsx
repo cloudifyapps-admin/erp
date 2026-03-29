@@ -36,6 +36,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Columns3,
+  Eye,
   GripVertical,
   ListFilter,
   MoreHorizontal,
@@ -144,6 +145,10 @@ export type AdvancedDataTableProps<T extends { id: string | number }> = {
   enableSelection?: boolean
   /** Bulk actions shown when rows are selected */
   bulkActions?: BulkAction[]
+  /** Click handler for entire row — navigates to detail view */
+  onRowClick?: (row: T) => void
+  /** Base path for "View" action in dropdown (e.g. "/projects" → "/projects/123") */
+  viewBasePath?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +259,8 @@ export function AdvancedDataTable<T extends { id: string | number }>({
   title,
   enableSelection = false,
   bulkActions = [],
+  onRowClick,
+  viewBasePath,
 }: AdvancedDataTableProps<T>) {
   const router = useRouter()
   const pathname = usePathname()
@@ -439,7 +446,7 @@ export function AdvancedDataTable<T extends { id: string | number }>({
         enableHiding: col.enableHiding ?? true,
       })),
       // Actions column
-      ...((editBasePath || deleteEndpoint || additionalActions)
+      ...((editBasePath || deleteEndpoint || additionalActions || viewBasePath)
         ? [
             {
               id: '_actions',
@@ -447,7 +454,7 @@ export function AdvancedDataTable<T extends { id: string | number }>({
               enableSorting: false,
               enableHiding: false,
               cell: ({ row }: { row: { original: T } }) => (
-                <div className="flex justify-end">
+                <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -460,6 +467,14 @@ export function AdvancedDataTable<T extends { id: string | number }>({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {viewBasePath && (
+                        <DropdownMenuItem asChild>
+                          <Link href={`${viewBasePath}/${row.original.id}`}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                       {editBasePath && (
                         <DropdownMenuItem asChild>
                           <Link href={`${editBasePath}/${row.original.id}/edit`}>
@@ -469,7 +484,7 @@ export function AdvancedDataTable<T extends { id: string | number }>({
                         </DropdownMenuItem>
                       )}
                       {additionalActions?.(row.original)}
-                      {deleteEndpoint && editBasePath && <DropdownMenuSeparator />}
+                      {(deleteEndpoint && (editBasePath || viewBasePath)) && <DropdownMenuSeparator />}
                       {deleteEndpoint && (
                         <DropdownMenuItem
                           variant="destructive"
@@ -487,7 +502,7 @@ export function AdvancedDataTable<T extends { id: string | number }>({
           ]
         : []),
     ],
-    [columnDefs, editBasePath, deleteEndpoint, additionalActions]
+    [columnDefs, editBasePath, viewBasePath, deleteEndpoint, additionalActions]
   )
 
   // Sorting state (for visual indicators only — actual sort is server-side)
@@ -876,7 +891,11 @@ export function AdvancedDataTable<T extends { id: string | number }>({
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="group border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors"
+                  className={cn(
+                    "group border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors",
+                    onRowClick && "cursor-pointer"
+                  )}
+                  onClick={() => onRowClick?.(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell

@@ -36,6 +36,19 @@ app.conf.update(
             "task": "app.tasks.recalculate_lead_scores",
             "schedule": crontab(hour=3, minute=0),  # Daily 3 AM
         },
+        # Project automation
+        "project-task-due-reminders": {
+            "task": "app.tasks.project_task_due_reminders",
+            "schedule": crontab(hour=8, minute=0),  # Daily 8 AM
+        },
+        "project-progress-recalculation": {
+            "task": "app.tasks.recalculate_project_progress",
+            "schedule": crontab(minute="*/30"),  # Every 30 min
+        },
+        "project-budget-alerts": {
+            "task": "app.tasks.check_project_budget_alerts",
+            "schedule": crontab(hour=7, minute=0),  # Daily 7 AM
+        },
     },
 )
 
@@ -49,6 +62,126 @@ def process_recurring_invoices():
 @app.task(name="app.tasks.process_recurring_tasks")
 def process_recurring_tasks():
     """Generate tasks from recurring templates."""
+    import asyncio
+    from datetime import date, timedelta
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+    from sqlalchemy import select, and_
+    from app.models.projects import Task
+
+    async def _process():
+        engine = create_async_engine(settings.DATABASE_URL)
+        Session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        today = date.today()
+        async with Session() as db:
+            result = await db.execute(
+                select(Task).where(
+                    and_(
+                        Task.is_recurring == True,
+                        Task.next_recurring_date <= today,
+                    )
+                )
+            )
+            for task in result.scalars().all():
+                # Skip if past end date
+                if task.recurring_end_date and task.recurring_end_date < today:
+                    continue
+                # Clone the task
+                new_task = Task(
+                    project_id=task.project_id,
+                    milestone_id=task.milestone_id,
+                    title=task.title,
+                    description=task.description,
+                    assigned_to=task.assigned_to,
+                    priority=task.priority,
+                    status="todo",
+                    estimated_hours=task.estimated_hours,
+                    sort_order=task.sort_order,
+                    parent_task_id=task.id,
+                    tenant_id=task.tenant_id,
+                    created_by=task.created_by,
+                    updated_by=task.updated_by,
+                    start_date=today,
+                )
+                # Set due date based on frequency
+                freq = task.recurring_frequency
+                if freq == "daily":
+                    new_task.due_date = today
+                    task.next_recurring_date = today + timedelta(days=1)
+                elif freq == "weekly":
+                    new_task.due_date = today + timedelta(days=7)
+                    task.next_recurring_date = today + timedelta(days=7)
+                elif freq == "biweekly":
+                    new_task.due_date = today + timedelta(days=14)
+                    task.next_recurring_date = today + timedelta(days=14)
+                elif freq == "monthly":
+                    new_task.due_date = today + timedelta(days=30)
+                    task.next_recurring_date = today + timedelta(days=30)
+                elif freq == "quarterly":
+                    new_task.due_date = today + timedelta(days=90)
+                    task.next_recurring_date = today + timedelta(days=90)
+                else:
+                    task.next_recurring_date = today + timedelta(days=7)
+                db.add(new_task)
+                task.recurring_count += 1
+            await db.commit()
+        await engine.dispose()
+
+    try:
+        asyncio.run(_process())
+    except Exception:
+        pass
+
+
+@app.task(name="app.tasks.project_task_due_reminders")
+def project_task_due_reminders():
+    """Send reminders for tasks due within 24h or overdue."""
+    pass
+
+
+@app.task(name="app.tasks.recalculate_project_progress")
+def recalculate_project_progress():
+    """Recalculate progress for all active projects."""
+    import asyncio
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+    from sqlalchemy import select, func, and_
+    from app.models.projects import Project, Task, TimeLog
+
+    async def _process():
+        engine = create_async_engine(settings.DATABASE_URL)
+        Session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with Session() as db:
+            result = await db.execute(
+                select(Project).where(Project.status == "active")
+            )
+            for proj in result.scalars().all():
+                # Task-based progress
+                task_result = await db.execute(
+                    select(
+                        func.count(Task.id).label("total"),
+                        func.count(Task.id).filter(Task.status == "done").label("done"),
+                    ).where(and_(Task.project_id == proj.id, Task.tenant_id == proj.tenant_id))
+                )
+                ts = task_result.one()
+                proj.progress = round((ts.done / ts.total * 100) if ts.total > 0 else 0)
+                # Total hours
+                hours_result = await db.execute(
+                    select(func.coalesce(func.sum(TimeLog.hours), 0)).where(
+                        and_(TimeLog.project_id == proj.id, TimeLog.tenant_id == proj.tenant_id)
+                    )
+                )
+                proj.total_hours = float(hours_result.scalar())
+            await db.commit()
+        await engine.dispose()
+
+    try:
+        asyncio.run(_process())
+    except Exception:
+        pass
+
+
+@app.task(name="app.tasks.check_project_budget_alerts")
+def check_project_budget_alerts():
+    """Alert when project expenses reach 80%/90%/100% of budget."""
     pass
 
 

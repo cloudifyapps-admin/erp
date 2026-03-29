@@ -340,9 +340,9 @@ export default function MasterDataTypePage() {
 
       <DeleteDialog
         open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
         title={`Delete "${deleteTarget?.name}"?`}
         onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );

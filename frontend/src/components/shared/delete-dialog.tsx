@@ -13,7 +13,8 @@ import { Loader2 } from 'lucide-react'
 
 type DeleteDialogProps = {
   open: boolean
-  onOpenChange: (open: boolean) => void
+  onOpenChange?: (open: boolean) => void
+  onCancel?: () => void
   onConfirm: () => void
   loading?: boolean
   title?: string
@@ -23,13 +24,18 @@ type DeleteDialogProps = {
 export function DeleteDialog({
   open,
   onOpenChange,
+  onCancel,
   onConfirm,
   loading = false,
   title = 'Delete Record',
   description = 'Are you sure you want to delete this record? This action cannot be undone.',
 }: DeleteDialogProps) {
+  const handleOpenChange = (v: boolean) => {
+    onOpenChange?.(v)
+    if (!v) onCancel?.()
+  }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -38,7 +44,7 @@ export function DeleteDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
             disabled={loading}
           >
             Cancel

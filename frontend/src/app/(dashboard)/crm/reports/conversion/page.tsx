@@ -109,7 +109,7 @@ export default function ConversionFunnelPage() {
             <div className="space-y-3">
               {statuses.map((s) => {
                 const pct = maxCount > 0 ? (s.count / maxCount) * 100 : 0
-                const totalPct = data.total_leads > 0 ? (s.count / data.total_leads) * 100 : 0
+                const totalPct = data && data.total_leads > 0 ? (s.count / data.total_leads) * 100 : 0
                 return (
                   <div key={s.status} className="flex items-center gap-3">
                     <span className="w-24 shrink-0 text-right text-sm font-medium capitalize">
@@ -162,7 +162,7 @@ export default function ConversionFunnelPage() {
                       <td className="py-2.5 pr-4 capitalize">{s.status.replace(/_/g, ' ')}</td>
                       <td className="py-2.5 pr-4 text-right">{s.count}</td>
                       <td className="py-2.5 text-right">
-                        {data.total_leads > 0
+                        {data && data.total_leads > 0
                           ? ((s.count / data.total_leads) * 100).toFixed(1)
                           : '0.0'}
                         %

@@ -24,6 +24,8 @@ DEFAULT_SERIES = {
     "purchase_request": {"prefix": "PR", "padding": 5, "next_number": 1},
     "opportunity": {"prefix": "OPP", "padding": 5, "next_number": 1},
     "campaign": {"prefix": "CAMP", "padding": 4, "next_number": 1},
+    "change_request": {"prefix": "CR", "padding": 4, "next_number": 1},
+    "status_report": {"prefix": "SR", "padding": 4, "next_number": 1},
 }
 
 

@@ -392,6 +392,67 @@ class Territory(TenantMixin, Base):
     )
 
 
+class ProjectCategory(TenantMixin, Base):
+    __tablename__ = "project_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_project_category_slug"),
+    )
+
+
+class TaskLabel(TenantMixin, Base):
+    __tablename__ = "task_labels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    color = Column(String(20), nullable=True)
+    slug = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_task_label_slug"),
+    )
+
+
+class CostCategory(TenantMixin, Base):
+    __tablename__ = "cost_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_cost_category_slug"),
+    )
+
+
+class RiskCategory(TenantMixin, Base):
+    __tablename__ = "risk_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_risk_category_slug"),
+    )
+
+
 class Campaign(TenantMixin, Base):
     __tablename__ = "campaigns"
 

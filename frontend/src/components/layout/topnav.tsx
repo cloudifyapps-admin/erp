@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import {
   Menu,
   Search,
@@ -10,11 +11,17 @@ import {
   Bell,
   HelpCircle,
   MessageSquare,
+  Building2,
+  Check,
+  Crown,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
@@ -23,12 +30,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 interface TopNavProps {
   onMenuToggle: () => void;
@@ -45,7 +57,21 @@ function getInitials(name: string | null | undefined): string {
 }
 
 export function TopNav({ onMenuToggle }: TopNavProps) {
-  const { user, role, logout } = useAuthStore();
+  const { user, tenant, tenants, role, logout, fetchTenants, switchTenant } = useAuthStore();
+
+  // Fetch tenants on mount
+  useEffect(() => {
+    if (tenants.length === 0) fetchTenants();
+  }, []);
+
+  const handleSwitchTenant = async (tenantId: number) => {
+    if (tenant?.id === tenantId) return;
+    try {
+      await switchTenant(tenantId);
+    } catch {
+      toast.error('Failed to switch organization');
+    }
+  };
 
   return (
     <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-border/60 bg-card px-5">
@@ -59,6 +85,54 @@ export function TopNav({ onMenuToggle }: TopNavProps) {
       >
         <Menu className="size-[18px]" />
       </Button>
+
+      {/* Org Switcher */}
+      {tenants.length > 1 ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5 text-[13px] font-medium transition-colors hover:bg-muted/50 focus:outline-none">
+              <Building2 className="size-3.5 text-muted-foreground/70" />
+              <span className="max-w-[160px] truncate">{tenant?.name ?? 'Organization'}</span>
+              <ChevronDown className="size-3 text-muted-foreground/50" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuLabel className="text-[11px] text-muted-foreground font-medium">
+              Switch Organization
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {tenants.map((t) => (
+              <DropdownMenuItem
+                key={t.id}
+                onClick={() => handleSwitchTenant(t.id)}
+                className="flex items-center gap-3 py-2.5 cursor-pointer"
+              >
+                <div className={cn(
+                  'size-8 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-bold',
+                  t.is_current
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                )}>
+                  {t.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-medium truncate">{t.name}</span>
+                    {t.is_owner && <Crown className="size-3 text-amber-500 shrink-0" />}
+                  </div>
+                  <span className="text-[11px] text-muted-foreground capitalize">{t.role}</span>
+                </div>
+                {t.is_current && <Check className="size-4 text-primary shrink-0" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : tenant ? (
+        <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-1.5 text-[13px] font-medium text-foreground/80">
+          <Building2 className="size-3.5 text-muted-foreground/70" />
+          <span className="max-w-[160px] truncate">{tenant.name}</span>
+        </div>
+      ) : null}
 
       {/* Search */}
       <div className="relative ml-2 flex-1 max-w-lg">
@@ -155,6 +229,40 @@ export function TopNav({ onMenuToggle }: TopNavProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+
+            {/* Tenant switcher in user menu (for quick access) */}
+            {tenants.length > 1 && (
+              <>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="gap-2">
+                    <ArrowLeftRight className="size-4" />
+                    Switch Organization
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-56">
+                    {tenants.map((t) => (
+                      <DropdownMenuItem
+                        key={t.id}
+                        onClick={() => handleSwitchTenant(t.id)}
+                        className="flex items-center gap-2.5 py-2 cursor-pointer"
+                      >
+                        <div className={cn(
+                          'size-6 rounded-md flex items-center justify-center shrink-0 text-[10px] font-bold',
+                          t.is_current
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground'
+                        )}>
+                          {t.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="flex-1 truncate text-[13px]">{t.name}</span>
+                        {t.is_current && <Check className="size-3.5 text-primary shrink-0" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
+              </>
+            )}
+
             <DropdownMenuItem>
               <User className="mr-2 size-4" />
               Profile

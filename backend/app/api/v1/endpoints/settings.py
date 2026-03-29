@@ -48,6 +48,10 @@ from app.models.tenant_models import (
     LostReason,
     Competitor,
     Territory,
+    ProjectCategory,
+    TaskLabel,
+    CostCategory,
+    RiskCategory,
 )
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -80,6 +84,10 @@ MASTER_DATA_REGISTRY: dict[str, tuple] = {
     "lost-reasons":        (LostReason,       ["name"],                 True),
     "competitors":         (Competitor,       ["name"],                 True),
     "territories":         (Territory,        ["name"],                 True),
+    "project-categories":  (ProjectCategory,  ["name"],                 True),
+    "task-labels":         (TaskLabel,        ["name"],                 True),
+    "cost-categories":     (CostCategory,     ["name"],                 True),
+    "risk-categories":     (RiskCategory,     ["name"],                 True),
 }
 
 
@@ -473,6 +481,7 @@ async def list_team_members(
             User.name,
             User.email,
             TenantUser.created_at.label("joined_at"),
+            TenantUser.is_active.label("is_active"),
             Role.name.label("role_name"),
             Role.id.label("role_id"),
         )
@@ -503,13 +512,82 @@ async def list_team_members(
             "email": r.email,
             "role_name": r.role_name or "—",
             "role_id": str(r.role_id) if r.role_id else None,
-            "status": "active",
+            "status": "active" if getattr(r, "is_active", True) else "inactive",
             "joined_at": r.joined_at.isoformat() if r.joined_at else None,
             "last_active": None,
         }
         for r in rows
     ]
     return _list_response(items, total, page, per_page)
+
+
+@router.patch("/team-members/{id}")
+async def update_team_member(
+    id: int,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant_id),
+):
+    """Update a team member's role and/or active status."""
+    result = await db.execute(
+        select(TenantUser).where(TenantUser.user_id == id, TenantUser.tenant_id == tenant_id)
+    )
+    tu = result.scalar_one_or_none()
+    if not tu:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    # Update is_active
+    if "is_active" in data:
+        if user.id == id and data["is_active"] is False:
+            raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
+        tu.is_active = bool(data["is_active"])
+
+    # Update role
+    if "role_id" in data and data["role_id"]:
+        role_id = int(data["role_id"])
+        # Check role exists
+        role_result = await db.execute(select(Role).where(Role.id == role_id, Role.tenant_id == tenant_id))
+        role = role_result.scalar_one_or_none()
+        if not role:
+            raise HTTPException(status_code=404, detail="Role not found")
+        # Upsert UserRole
+        ur_result = await db.execute(
+            select(UserRole).where(UserRole.user_id == id, UserRole.tenant_id == tenant_id)
+        )
+        ur = ur_result.scalar_one_or_none()
+        if ur:
+            ur.role_id = role_id
+        else:
+            db.add(UserRole(user_id=id, tenant_id=tenant_id, role_id=role_id))
+
+    await db.commit()
+
+    # Return updated member info
+    member_result = await db.execute(
+        select(
+            User.id, User.name, User.email,
+            TenantUser.created_at.label("joined_at"),
+            TenantUser.is_active.label("is_active"),
+            Role.name.label("role_name"),
+            Role.id.label("role_id"),
+        )
+        .join(TenantUser, TenantUser.user_id == User.id)
+        .outerjoin(UserRole, (UserRole.user_id == User.id) & (UserRole.tenant_id == tenant_id))
+        .outerjoin(Role, Role.id == UserRole.role_id)
+        .where(User.id == id, TenantUser.tenant_id == tenant_id)
+    )
+    r = member_result.first()
+    return {
+        "id": str(r.id),
+        "full_name": r.name or r.email,
+        "email": r.email,
+        "role_name": r.role_name or "—",
+        "role_id": str(r.role_id) if r.role_id else None,
+        "status": "active" if r.is_active else "inactive",
+        "joined_at": r.joined_at.isoformat() if r.joined_at else None,
+        "last_active": None,
+    }
 
 
 @router.delete("/team-members/{id}", status_code=204)
