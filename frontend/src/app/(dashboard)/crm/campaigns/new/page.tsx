@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2, User, Info, Tag, FileText, Plus, X } from 'lucide-react'
-import { Switch } from '@/components/ui/switch'
+import { Loader2, FileText, DollarSign, Info, Plus, X } from 'lucide-react'
 import api from '@/lib/api'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -20,19 +19,16 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
-interface ContactForm {
-  first_name: string
-  last_name: string
-  email: string
-  phone: string
-  mobile: string
-  company: string
-  job_title: string
-  department: string
-  do_not_email: boolean
-  do_not_call: boolean
+interface CampaignForm {
+  name: string
+  type: string
   status: string
-  notes: string
+  start_date: string
+  end_date: string
+  description: string
+  budget: string
+  actual_cost: string
+  expected_revenue: string
 }
 
 interface CustomField {
@@ -41,23 +37,46 @@ interface CustomField {
   value: string
 }
 
-const INITIAL: ContactForm = {
-  first_name: '',
-  last_name: '',
-  email: '',
-  phone: '',
-  mobile: '',
-  company: '',
-  job_title: '',
-  department: '',
-  do_not_email: false,
-  do_not_call: false,
-  status: 'active',
-  notes: '',
+const INITIAL: CampaignForm = {
+  name: '',
+  type: 'email',
+  status: 'draft',
+  start_date: '',
+  end_date: '',
+  description: '',
+  budget: '',
+  actual_cost: '',
+  expected_revenue: '',
 }
 
+const TYPE_OPTIONS = [
+  { value: 'email', label: 'Email' },
+  { value: 'event', label: 'Event' },
+  { value: 'webinar', label: 'Webinar' },
+  { value: 'advertising', label: 'Advertising' },
+  { value: 'social_media', label: 'Social Media' },
+  { value: 'other', label: 'Other' },
+]
+
+const STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
 /* ── Reusable key-value row ─────────────────────────────────────────── */
-function FormRow({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
+function FormRow({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string
+  required?: boolean
+  error?: string
+  children: React.ReactNode
+}) {
   return (
     <div className="grid grid-cols-[180px_1fr] items-start gap-4 py-3.5 border-b border-border/30 last:border-b-0">
       <Label className="pt-2.5 text-[13px] font-medium text-muted-foreground leading-tight">
@@ -72,21 +91,21 @@ function FormRow({ label, required, error, children }: { label: string; required
   )
 }
 
-export default function NewContactPage() {
+export default function NewCampaignPage() {
   const router = useRouter()
-  const [form, setForm] = useState<ContactForm>(INITIAL)
+  const [form, setForm] = useState<CampaignForm>(INITIAL)
   const [saving, setSaving] = useState(false)
-  const [errors, setErrors] = useState<Partial<Record<keyof ContactForm, string>>>({})
+  const [errors, setErrors] = useState<Partial<Record<keyof CampaignForm, string>>>({})
   const [customFields, setCustomFields] = useState<CustomField[]>([])
 
   const set =
-    (key: keyof ContactForm) =>
+    (key: keyof CampaignForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm((f) => ({ ...f, [key]: e.target.value }))
       setErrors((e) => ({ ...e, [key]: undefined }))
     }
 
-  const setSelect = (key: keyof ContactForm) => (value: string) => {
+  const setSelect = (key: keyof CampaignForm) => (value: string) => {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
@@ -108,10 +127,11 @@ export default function NewContactPage() {
   }
 
   const validate = (): boolean => {
-    const errs: Partial<Record<keyof ContactForm, string>> = {}
-    if (!form.first_name.trim()) errs.first_name = 'First name is required'
-    if (!form.last_name.trim()) errs.last_name = 'Last name is required'
-    if (form.email && !/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Invalid email'
+    const errs: Partial<Record<keyof CampaignForm, string>> = {}
+    if (!form.name.trim()) errs.name = 'Campaign name is required'
+    if (form.end_date && form.start_date && form.end_date < form.start_date) {
+      errs.end_date = 'End date must be after start date'
+    }
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -127,15 +147,20 @@ export default function NewContactPage() {
       })
       const payload = {
         ...form,
+        budget: form.budget ? parseFloat(form.budget) : null,
+        actual_cost: form.actual_cost ? parseFloat(form.actual_cost) : null,
+        expected_revenue: form.expected_revenue ? parseFloat(form.expected_revenue) : null,
+        start_date: form.start_date || null,
+        end_date: form.end_date || null,
         custom_fields: Object.keys(customData).length > 0 ? customData : null,
       }
-      await api.post('/crm/contacts', payload)
-      toast.success('Contact created successfully')
-      router.push('/crm/contacts')
+      await api.post('/crm/campaigns', payload)
+      toast.success('Campaign created successfully')
+      router.push('/crm/campaigns')
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? 'Failed to create contact'
+          ?.detail ?? 'Failed to create campaign'
       toast.error(msg)
     } finally {
       setSaving(false)
@@ -145,10 +170,10 @@ export default function NewContactPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-        title="New Contact"
+        title="New Campaign"
         breadcrumbs={[
           { label: 'CRM' },
-          { label: 'Contacts', href: '/crm/contacts' },
+          { label: 'Campaigns', href: '/crm/campaigns' },
         ]}
         actions={
           <div className="flex items-center gap-2">
@@ -164,157 +189,151 @@ export default function NewContactPage() {
             </Button>
             <Button
               type="submit"
-              form="contact-form"
+              form="campaign-form"
               size="sm"
               className="h-9 rounded-lg px-5 text-[13px] font-semibold shadow-sm"
               disabled={saving}
             >
               {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {saving ? 'Creating...' : 'Create Contact'}
+              {saving ? 'Creating...' : 'Create Campaign'}
             </Button>
           </div>
         }
       />
 
-      <form id="contact-form" onSubmit={handleSubmit}>
+      <form id="campaign-form" onSubmit={handleSubmit}>
         <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm">
           <Tabs defaultValue="details" className="gap-0">
             <div className="border-b border-border/40 bg-muted/30 px-6">
               <TabsList variant="line" className="!h-auto gap-2">
                 <TabsTrigger value="details" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
-                  <User className="h-[18px] w-[18px]" />
+                  <FileText className="h-[18px] w-[18px]" />
                   Details
                 </TabsTrigger>
-                <TabsTrigger value="classification" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
-                  <Tag className="h-[18px] w-[18px]" />
-                  Classification
+                <TabsTrigger value="budget" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <DollarSign className="h-[18px] w-[18px]" />
+                  Budget
                 </TabsTrigger>
                 <TabsTrigger value="additional" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
                   <Info className="h-[18px] w-[18px]" />
                   Additional Information
-                </TabsTrigger>
-                <TabsTrigger value="notes" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
-                  <FileText className="h-[18px] w-[18px]" />
-                  Notes
                 </TabsTrigger>
               </TabsList>
             </div>
 
             {/* Tab: Details */}
             <TabsContent value="details" className="p-6 lg:px-8 lg:py-2">
-              <FormRow label="First Name" required error={errors.first_name}>
+              <FormRow label="Campaign Name" required error={errors.name}>
                 <Input
-                  id="first_name"
-                  value={form.first_name}
-                  onChange={set('first_name')}
-                  placeholder="John"
-                  aria-invalid={!!errors.first_name}
+                  id="name"
+                  value={form.name}
+                  onChange={set('name')}
+                  placeholder="e.g. Spring 2026 Email Blast"
+                  aria-invalid={!!errors.name}
                   className="h-10"
                 />
               </FormRow>
-              <FormRow label="Last Name" required error={errors.last_name}>
-                <Input
-                  id="last_name"
-                  value={form.last_name}
-                  onChange={set('last_name')}
-                  placeholder="Doe"
-                  aria-invalid={!!errors.last_name}
-                  className="h-10"
-                />
+              <FormRow label="Type">
+                <Select value={form.type} onValueChange={setSelect('type')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TYPE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FormRow>
-              <FormRow label="Email" error={errors.email}>
-                <Input
-                  id="email"
-                  type="email"
-                  value={form.email}
-                  onChange={set('email')}
-                  placeholder="john.doe@example.com"
-                  aria-invalid={!!errors.email}
-                  className="h-10"
-                />
-              </FormRow>
-              <FormRow label="Phone">
-                <Input
-                  id="phone"
-                  value={form.phone}
-                  onChange={set('phone')}
-                  placeholder="+1 555 0100"
-                  className="h-10"
-                />
-              </FormRow>
-              <FormRow label="Mobile">
-                <Input
-                  id="mobile"
-                  value={form.mobile}
-                  onChange={set('mobile')}
-                  placeholder="+1 555 0101"
-                  className="h-10"
-                />
-              </FormRow>
-              <FormRow label="Company">
-                <Input
-                  id="company"
-                  value={form.company}
-                  onChange={set('company')}
-                  placeholder="Acme Corp"
-                  className="h-10"
-                />
-              </FormRow>
-              <FormRow label="Job Title">
-                <Input
-                  id="job_title"
-                  value={form.job_title}
-                  onChange={set('job_title')}
-                  placeholder="VP of Sales"
-                  className="h-10"
-                />
-              </FormRow>
-              <FormRow label="Department">
-                <Input
-                  id="department"
-                  value={form.department}
-                  onChange={set('department')}
-                  placeholder="Engineering"
-                  className="h-10"
-                />
-              </FormRow>
-            </TabsContent>
-
-            {/* Tab: Classification */}
-            <TabsContent value="classification" className="p-6 lg:px-8 lg:py-2">
               <FormRow label="Status">
                 <Select value={form.status} onValueChange={setSelect('status')}>
                   <SelectTrigger className="w-full h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
+                    {STATUS_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </FormRow>
-              <FormRow label="Do Not Email">
-                <div className="flex items-center h-10">
-                  <Switch
-                    checked={form.do_not_email}
-                    onCheckedChange={(checked: boolean) => setForm((f) => ({ ...f, do_not_email: checked }))}
-                  />
-                </div>
+              <FormRow label="Start Date">
+                <Input
+                  id="start_date"
+                  type="date"
+                  value={form.start_date}
+                  onChange={set('start_date')}
+                  className="h-10"
+                />
               </FormRow>
-              <FormRow label="Do Not Call">
-                <div className="flex items-center h-10">
-                  <Switch
-                    checked={form.do_not_call}
-                    onCheckedChange={(checked: boolean) => setForm((f) => ({ ...f, do_not_call: checked }))}
-                  />
-                </div>
+              <FormRow label="End Date" error={errors.end_date}>
+                <Input
+                  id="end_date"
+                  type="date"
+                  value={form.end_date}
+                  onChange={set('end_date')}
+                  aria-invalid={!!errors.end_date}
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Description">
+                <Textarea
+                  value={form.description}
+                  onChange={set('description')}
+                  placeholder="Describe the campaign objectives and strategy..."
+                  rows={4}
+                  className="resize-none"
+                />
               </FormRow>
             </TabsContent>
 
-            {/* Tab: Additional Information — dynamic custom key-value fields */}
+            {/* Tab: Budget */}
+            <TabsContent value="budget" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Budget">
+                <Input
+                  id="budget"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.budget}
+                  onChange={set('budget')}
+                  placeholder="0.00"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Actual Cost">
+                <Input
+                  id="actual_cost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.actual_cost}
+                  onChange={set('actual_cost')}
+                  placeholder="0.00"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Expected Revenue">
+                <Input
+                  id="expected_revenue"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.expected_revenue}
+                  onChange={set('expected_revenue')}
+                  placeholder="0.00"
+                  className="h-10"
+                />
+              </FormRow>
+            </TabsContent>
+
+            {/* Tab: Additional Information — dynamic key-value pairs */}
             <TabsContent value="additional" className="p-6 lg:px-8 lg:py-2">
-              <div className="pt-2 pb-2 flex items-center justify-between">
+              <div className="pt-1 pb-2 flex items-center justify-between">
                 <p className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground/70">Custom Fields</p>
                 <Button
                   type="button"
@@ -363,17 +382,6 @@ export default function NewContactPage() {
                   </Button>
                 </div>
               ))}
-            </TabsContent>
-
-            {/* Tab: Notes */}
-            <TabsContent value="notes" className="p-6 lg:p-8">
-              <Textarea
-                value={form.notes}
-                onChange={set('notes')}
-                placeholder="Add any relevant notes about this contact..."
-                rows={10}
-                className="resize-none"
-              />
             </TabsContent>
           </Tabs>
         </div>

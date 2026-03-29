@@ -73,11 +73,14 @@ const navGroups: NavGroup[] = [
   {
     category: 'CRM',
     items: [
+      { label: 'Dashboard', href: '/crm/dashboard', icon: BarChart3 },
       { label: 'Leads', href: '/crm/leads', icon: TrendingUp },
       { label: 'Contacts', href: '/crm/contacts', icon: UserCircle },
       { label: 'Customers', href: '/crm/customers', icon: Users },
       { label: 'Opportunities', href: '/crm/opportunities', icon: TrendingUp },
       { label: 'Activities', href: '/crm/activities', icon: CalendarDays },
+      { label: 'Campaigns', href: '/crm/campaigns', icon: Flag },
+      { label: 'Reports', href: '/crm/reports', icon: FileText },
     ],
   },
   {

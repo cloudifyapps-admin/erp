@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
@@ -188,6 +188,24 @@ export default function CustomersPage() {
         emptyDescription="Create your first customer to get started."
         searchPlaceholder="Search customers..."
         storageKey="crm-customers"
+        enableSelection
+        bulkActions={[
+          {
+            label: 'Delete Selected',
+            icon: <Trash2 className="h-3.5 w-3.5" />,
+            variant: 'destructive',
+            onClick: async (ids) => {
+              if (!confirm(`Delete ${ids.length} customer(s)?`)) return
+              try {
+                await api.post('/crm/customers/bulk-delete', { ids })
+                toast.success(`${ids.length} customer(s) deleted`)
+                fetchCustomers()
+              } catch {
+                toast.error('Failed to delete customers')
+              }
+            },
+          },
+        ]}
       />
     </div>
   )

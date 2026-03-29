@@ -54,6 +54,7 @@ LANGUAGES = [
 
 RESOURCES = [
     "leads", "contacts", "customers", "opportunities", "activities",
+    "campaigns", "territories", "tags", "notes", "email-templates", "web-forms",
     "quotations", "sales-orders", "deliveries", "invoices",
     "vendors", "purchase-orders", "goods-receipts", "purchase-requests",
     "products", "warehouses", "stock-movements", "stock-adjustments", "stock-transfers",

@@ -40,6 +40,11 @@ const TYPE_LABELS: Record<string, string> = {
   'activity-types': 'Activity Types',
   'task-statuses': 'Task Statuses',
   'salutations': 'Salutations',
+  'industries': 'Industries',
+  'customer-ratings': 'Customer Ratings',
+  'lost-reasons': 'Lost Reasons',
+  'competitors': 'Competitors',
+  'territories': 'Territories',
 };
 
 const EMPTY_FORM = { name: '', code: '', description: '', is_active: true, sort_order: 0 };

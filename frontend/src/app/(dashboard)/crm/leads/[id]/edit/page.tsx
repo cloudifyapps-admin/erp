@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2, User, Info, Tag, FileText, Plus, X } from 'lucide-react'
+import { Loader2, User, Info, Tag, FileText, Plus, X, Target, Clock, ArrowRightCircle, CheckCircle2, Sparkles } from 'lucide-react'
 import api from '@/lib/api'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,12 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AuditTimeline } from '@/components/shared/audit-timeline'
+
+interface DropdownOption {
+  id: number
+  name: string
+}
 
 interface LeadForm {
   title: string
@@ -37,6 +43,11 @@ interface LeadForm {
   industry: string
   annual_revenue: string
   number_of_employees: string
+  industry_id: string
+  rating_id: string
+  campaign_id: string
+  territory_id: string
+  next_follow_up_at: string
   address_line1: string
   address_line2: string
   city: string
@@ -68,6 +79,11 @@ const INITIAL: LeadForm = {
   industry: '',
   annual_revenue: '',
   number_of_employees: '',
+  industry_id: '',
+  rating_id: '',
+  campaign_id: '',
+  territory_id: '',
+  next_follow_up_at: '',
   address_line1: '',
   address_line2: '',
   city: '',
@@ -146,8 +162,19 @@ export default function EditLeadPage({
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof LeadForm, string>>>({})
   const [customFields, setCustomFields] = useState<CustomField[]>([])
+  const [leadScore, setLeadScore] = useState<number>(0)
+  const [convertedAt, setConvertedAt] = useState<string | null>(null)
+  const [industries, setIndustries] = useState<DropdownOption[]>([])
+  const [ratings, setRatings] = useState<DropdownOption[]>([])
+  const [campaigns, setCampaigns] = useState<DropdownOption[]>([])
+  const [territories, setTerritories] = useState<DropdownOption[]>([])
 
   useEffect(() => {
+    api.get('/settings/master-data/industries').then(({ data }) => setIndustries(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/customer-ratings').then(({ data }) => setRatings(data.items ?? [])).catch(() => {})
+    api.get('/crm/campaigns').then(({ data }) => setCampaigns(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/territories').then(({ data }) => setTerritories(data.items ?? [])).catch(() => {})
+
     api
       .get(`/crm/leads/${id}`)
       .then(({ data }) => {
@@ -168,6 +195,11 @@ export default function EditLeadPage({
           industry: data.industry ?? '',
           annual_revenue: data.annual_revenue ? String(data.annual_revenue) : '',
           number_of_employees: data.number_of_employees ? String(data.number_of_employees) : '',
+          industry_id: data.industry_id ? String(data.industry_id) : '',
+          rating_id: data.rating_id ? String(data.rating_id) : '',
+          campaign_id: data.campaign_id ? String(data.campaign_id) : '',
+          territory_id: data.territory_id ? String(data.territory_id) : '',
+          next_follow_up_at: data.next_follow_up_at ? data.next_follow_up_at.slice(0, 16) : '',
           address_line1: data.address_line1 ?? '',
           address_line2: data.address_line2 ?? '',
           city: data.city ?? '',
@@ -175,6 +207,8 @@ export default function EditLeadPage({
           zip_code: data.zip_code ?? '',
           country: data.country ?? '',
         })
+        setLeadScore(data.lead_score ?? 0)
+        setConvertedAt(data.converted_at ?? null)
         // Load existing custom fields
         if (data.custom_fields && typeof data.custom_fields === 'object') {
           const existing = Object.entries(data.custom_fields).map(([key, value]) => ({
@@ -238,8 +272,15 @@ export default function EditLeadPage({
       const payload = {
         ...form,
         assigned_to: form.assigned_to ? parseInt(form.assigned_to) : null,
-        salutation_id: (form as Record<string, unknown>).salutation_id || null,
-        country_id: (form as Record<string, unknown>).country_id || null,
+        salutation_id: (form as unknown as Record<string, unknown>).salutation_id || null,
+        country_id: (form as unknown as Record<string, unknown>).country_id || null,
+        industry_id: form.industry_id ? parseInt(form.industry_id) : null,
+        rating_id: form.rating_id ? parseInt(form.rating_id) : null,
+        campaign_id: form.campaign_id ? parseInt(form.campaign_id) : null,
+        territory_id: form.territory_id ? parseInt(form.territory_id) : null,
+        annual_revenue: form.annual_revenue ? parseFloat(form.annual_revenue) : null,
+        number_of_employees: form.number_of_employees ? parseInt(form.number_of_employees) : null,
+        next_follow_up_at: form.next_follow_up_at || null,
         custom_fields: Object.keys(customData).length > 0 ? customData : null,
       }
       await api.put(`/crm/leads/${id}`, payload)
@@ -275,6 +316,38 @@ export default function EditLeadPage({
         ]}
         actions={
           <div className="flex items-center gap-2">
+            {/* Lead Score Badge */}
+            {leadScore > 0 && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
+                  leadScore >= 60
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                    : leadScore >= 30
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                }`}
+              >
+                <Sparkles className="h-3 w-3" />
+                Score: {leadScore}
+              </span>
+            )}
+            {convertedAt ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Converted {new Date(convertedAt).toLocaleDateString()}
+              </span>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-lg px-4 text-[13px] gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
+                onClick={() => router.push(`/crm/leads/${id}/convert`)}
+              >
+                <ArrowRightCircle className="h-3.5 w-3.5" />
+                Convert Lead
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -312,6 +385,10 @@ export default function EditLeadPage({
                   <Tag className="h-[18px] w-[18px]" />
                   Classification
                 </TabsTrigger>
+                <TabsTrigger value="crm" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Target className="h-[18px] w-[18px]" />
+                  CRM
+                </TabsTrigger>
                 <TabsTrigger value="additional" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
                   <Info className="h-[18px] w-[18px]" />
                   Additional Information
@@ -319,6 +396,10 @@ export default function EditLeadPage({
                 <TabsTrigger value="notes" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
                   <FileText className="h-[18px] w-[18px]" />
                   Notes
+                </TabsTrigger>
+                <TabsTrigger value="timeline" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Clock className="h-[18px] w-[18px]" />
+                  Timeline
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -444,6 +525,75 @@ export default function EditLeadPage({
               </FormRow>
             </TabsContent>
 
+            {/* Tab: CRM — campaign, territory, rating, follow-up */}
+            <TabsContent value="crm" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Industry">
+                <Select value={form.industry_id} onValueChange={setSelect('industry_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select industry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {industries.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Rating">
+                <Select value={form.rating_id} onValueChange={setSelect('rating_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select rating" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ratings.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Campaign">
+                <Select value={form.campaign_id} onValueChange={setSelect('campaign_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select campaign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {campaigns.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Territory">
+                <Select value={form.territory_id} onValueChange={setSelect('territory_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select territory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {territories.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Next Follow Up">
+                <Input
+                  id="next_follow_up_at"
+                  type="datetime-local"
+                  value={form.next_follow_up_at}
+                  onChange={set('next_follow_up_at')}
+                  className="h-10"
+                />
+              </FormRow>
+            </TabsContent>
+
             {/* Tab: Additional Information — fixed fields + dynamic key-value pairs */}
             <TabsContent value="additional" className="p-6 lg:px-8 lg:py-2">
               <FormRow label="Website">
@@ -472,15 +622,17 @@ export default function EditLeadPage({
               <FormRow label="Annual Revenue">
                 <Input
                   id="annual_revenue"
+                  type="number"
                   value={form.annual_revenue}
                   onChange={set('annual_revenue')}
-                  placeholder="$0.00"
+                  placeholder="0.00"
                   className="h-10"
                 />
               </FormRow>
               <FormRow label="No. of Employees">
                 <Input
                   id="number_of_employees"
+                  type="number"
                   value={form.number_of_employees}
                   onChange={set('number_of_employees')}
                   placeholder="e.g. 50"
@@ -608,6 +760,11 @@ export default function EditLeadPage({
                 rows={10}
                 className="resize-none"
               />
+            </TabsContent>
+
+            {/* Tab: Timeline */}
+            <TabsContent value="timeline" className="p-6 lg:p-8">
+              <AuditTimeline entityType="leads" entityId={parseInt(id)} />
             </TabsContent>
           </Tabs>
         </div>

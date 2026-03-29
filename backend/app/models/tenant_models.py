@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, Numeric, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Boolean, Text, Numeric, Date, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from app.core.database import Base
 from app.models.base import TenantMixin
@@ -309,3 +309,107 @@ class LeaveType(TenantMixin, Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# CRM Master Data Lookup Tables
+# ---------------------------------------------------------------------------
+
+
+class Industry(TenantMixin, Base):
+    __tablename__ = "industries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_industry_slug"),
+    )
+
+
+class CustomerRating(TenantMixin, Base):
+    __tablename__ = "customer_ratings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(255), nullable=True)
+    color = Column(String(20), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_customer_rating_slug"),
+    )
+
+
+class LostReason(TenantMixin, Base):
+    __tablename__ = "lost_reasons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_lost_reason_slug"),
+    )
+
+
+class Competitor(TenantMixin, Base):
+    __tablename__ = "competitors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    website = Column(String(255), nullable=True)
+    strengths = Column(Text, nullable=True)
+    weaknesses = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+
+class Territory(TenantMixin, Base):
+    __tablename__ = "territories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(255), nullable=True)
+    parent_id = Column(Integer, ForeignKey("territories.id"), nullable=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_territory_slug"),
+    )
+
+
+class Campaign(TenantMixin, Base):
+    __tablename__ = "campaigns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    code = Column(String(50), nullable=False)
+    type = Column(String(50), nullable=True)  # email, event, webinar, advertising, social_media, other
+    status = Column(String(20), default="draft")  # draft, active, completed, cancelled
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+    budget = Column(Numeric(18, 2), nullable=True)
+    actual_cost = Column(Numeric(18, 2), nullable=True)
+    expected_revenue = Column(Numeric(18, 2), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    custom_fields = Column(JSONB, server_default='{}')
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_campaign_code"),
+    )

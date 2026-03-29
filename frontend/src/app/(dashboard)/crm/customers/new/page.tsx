@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { User, MapPin, Truck, Settings as SettingsIcon, Info, FileText, Plus, X, Loader2 } from 'lucide-react'
@@ -43,6 +43,12 @@ interface CustomerForm {
   shipping_state: string
   shipping_postal_code: string
   shipping_country: string
+  // Classification
+  industry_id: string
+  rating_id: string
+  territory_id: string
+  annual_revenue: string
+  employee_count: string
   // Settings
   currency: string
   payment_terms: string
@@ -77,10 +83,20 @@ const INITIAL: CustomerForm = {
   shipping_state: '',
   shipping_postal_code: '',
   shipping_country: '',
+  industry_id: '',
+  rating_id: '',
+  territory_id: '',
+  annual_revenue: '',
+  employee_count: '',
   currency: 'USD',
   payment_terms: 'net30',
   credit_limit: '',
   price_list: '',
+}
+
+interface MasterDataOption {
+  id: number
+  name: string
 }
 
 /* ── Reusable key-value row ─────────────────────────────────────────── */
@@ -105,6 +121,15 @@ export default function NewCustomerPage() {
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof CustomerForm, string>>>({})
   const [customFields, setCustomFields] = useState<CustomField[]>([])
+  const [industries, setIndustries] = useState<MasterDataOption[]>([])
+  const [ratings, setRatings] = useState<MasterDataOption[]>([])
+  const [territories, setTerritories] = useState<MasterDataOption[]>([])
+
+  useEffect(() => {
+    api.get('/settings/master-data/industries').then(({ data }) => setIndustries(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/customer-ratings').then(({ data }) => setRatings(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/territories').then(({ data }) => setTerritories(data.items ?? [])).catch(() => {})
+  }, [])
 
   const set =
     (key: keyof CustomerForm) =>
@@ -163,6 +188,11 @@ export default function NewCustomerPage() {
       })
       const payload = {
         ...form,
+        industry_id: form.industry_id ? Number(form.industry_id) : null,
+        rating_id: form.rating_id ? Number(form.rating_id) : null,
+        territory_id: form.territory_id ? Number(form.territory_id) : null,
+        annual_revenue: form.annual_revenue ? Number(form.annual_revenue) : null,
+        employee_count: form.employee_count ? Number(form.employee_count) : null,
         credit_limit: form.credit_limit ? Number(form.credit_limit) : null,
         custom_fields: Object.keys(customData).length > 0 ? customData : null,
       }
@@ -333,6 +363,66 @@ export default function NewCustomerPage() {
                   value={form.tax_id}
                   onChange={set('tax_id')}
                   placeholder="12-3456789"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Industry">
+                <Select value={form.industry_id} onValueChange={setSelect('industry_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select industry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {industries.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Rating">
+                <Select value={form.rating_id} onValueChange={setSelect('rating_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select rating" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ratings.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Territory">
+                <Select value={form.territory_id} onValueChange={setSelect('territory_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select territory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {territories.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Annual Revenue">
+                <Input
+                  id="annual_revenue"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.annual_revenue}
+                  onChange={set('annual_revenue')}
+                  placeholder="1000000.00"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Employee Count">
+                <Input
+                  id="employee_count"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.employee_count}
+                  onChange={set('employee_count')}
+                  placeholder="50"
                   className="h-10"
                 />
               </FormRow>

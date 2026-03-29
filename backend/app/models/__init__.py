@@ -6,8 +6,14 @@ from app.models.tenant_models import (
     LeadSource, LeadStatus, OpportunityStage, ActivityType, TaskStatus,
     TicketStatus, TicketPriority, TicketCategory, DocumentCategory,
     Salutation, LeaveType,
+    Industry, CustomerRating, LostReason, Competitor, Territory, Campaign,
 )
-from app.models.crm import Lead, Contact, Customer, CustomerContact, Opportunity, Activity
+from app.models.crm import (
+    Lead, Contact, Customer, CustomerContact, Opportunity, Activity,
+    OpportunityCompetitor, OpportunityProduct,
+    Tag, EntityTag, Note, AuditLog,
+    EmailTemplate, LeadScoringRule, WebForm,
+)
 from app.models.sales import Quotation, QuotationItem, SalesOrder, SalesOrderItem, Delivery, DeliveryItem, Invoice, InvoiceItem
 from app.models.purchase import Vendor, PurchaseRequest, PurchaseOrder, PurchaseOrderItem, GoodsReceipt, GoodsReceiptItem
 from app.models.inventory import Product, ProductVariant, Warehouse, StockMovement, StockLevel, StockAdjustment, StockAdjustmentItem, StockTransfer, StockTransferItem

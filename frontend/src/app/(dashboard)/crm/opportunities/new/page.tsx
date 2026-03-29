@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Loader2, TrendingUp, Info, Tag, FileText, Plus, X } from 'lucide-react'
@@ -19,6 +19,11 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
+interface DropdownOption {
+  id: number
+  name: string
+}
+
 interface OpportunityForm {
   title: string
   contact_name: string
@@ -31,6 +36,11 @@ interface OpportunityForm {
   source: string
   assigned_to: string
   notes: string
+  campaign_id: string
+  territory_id: string
+  lost_reason_id: string
+  lost_reason_detail: string
+  next_follow_up_at: string
 }
 
 interface CustomField {
@@ -51,6 +61,11 @@ const INITIAL: OpportunityForm = {
   source: 'manual',
   assigned_to: '',
   notes: '',
+  campaign_id: '',
+  territory_id: '',
+  lost_reason_id: '',
+  lost_reason_detail: '',
+  next_follow_up_at: '',
 }
 
 const STAGE_OPTIONS = [
@@ -98,6 +113,17 @@ export default function NewOpportunityPage() {
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof OpportunityForm, string>>>({})
   const [customFields, setCustomFields] = useState<CustomField[]>([])
+  const [campaigns, setCampaigns] = useState<DropdownOption[]>([])
+  const [territories, setTerritories] = useState<DropdownOption[]>([])
+  const [lostReasons, setLostReasons] = useState<DropdownOption[]>([])
+
+  useEffect(() => {
+    api.get('/crm/campaigns').then(({ data }) => setCampaigns(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/territories').then(({ data }) => setTerritories(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/lost-reasons').then(({ data }) => setLostReasons(data.items ?? [])).catch(() => {})
+  }, [])
+
+  const isLostStage = form.stage === 'closed_lost' || form.stage === 'lost'
 
   const set =
     (key: keyof OpportunityForm) =>
@@ -151,6 +177,11 @@ export default function NewOpportunityPage() {
         probability: form.probability ? Number(form.probability) : null,
         assigned_to: form.assigned_to ? parseInt(form.assigned_to) : null,
         expected_close_date: form.expected_close_date || null,
+        campaign_id: form.campaign_id ? parseInt(form.campaign_id) : null,
+        territory_id: form.territory_id ? parseInt(form.territory_id) : null,
+        lost_reason_id: isLostStage && form.lost_reason_id ? parseInt(form.lost_reason_id) : null,
+        lost_reason_detail: isLostStage && form.lost_reason_detail ? form.lost_reason_detail : null,
+        next_follow_up_at: form.next_follow_up_at || null,
         custom_fields: Object.keys(customData).length > 0 ? customData : null,
       }
       await api.post('/crm/opportunities', payload)
@@ -289,6 +320,15 @@ export default function NewOpportunityPage() {
                   className="h-10"
                 />
               </FormRow>
+              <FormRow label="Next Follow Up">
+                <Input
+                  id="next_follow_up_at"
+                  type="datetime-local"
+                  value={form.next_follow_up_at}
+                  onChange={set('next_follow_up_at')}
+                  className="h-10"
+                />
+              </FormRow>
             </TabsContent>
 
             {/* Tab: Classification */}
@@ -343,6 +383,61 @@ export default function NewOpportunityPage() {
                   className="h-10"
                 />
               </FormRow>
+              <FormRow label="Campaign">
+                <Select value={form.campaign_id} onValueChange={setSelect('campaign_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select campaign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {campaigns.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Territory">
+                <Select value={form.territory_id} onValueChange={setSelect('territory_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select territory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {territories.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              {isLostStage && (
+                <>
+                  <FormRow label="Lost Reason">
+                    <Select value={form.lost_reason_id} onValueChange={setSelect('lost_reason_id')}>
+                      <SelectTrigger className="w-full h-10">
+                        <SelectValue placeholder="Select lost reason" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lostReasons.map((o) => (
+                          <SelectItem key={o.id} value={String(o.id)}>
+                            {o.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormRow>
+                  <FormRow label="Lost Reason Detail">
+                    <Textarea
+                      value={form.lost_reason_detail}
+                      onChange={set('lost_reason_detail')}
+                      placeholder="Provide additional detail on why this opportunity was lost..."
+                      rows={3}
+                      className="resize-none"
+                    />
+                  </FormRow>
+                </>
+              )}
             </TabsContent>
 
             {/* Tab: Additional Information */}

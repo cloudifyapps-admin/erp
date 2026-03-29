@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { normalizePaginated } from '@/lib/api-helpers'
 import { PageHeader } from '@/components/shared/page-header'
@@ -42,6 +42,7 @@ export default function ContactsPage() {
   const perPage = Number(searchParams.get('per_page') ?? 25)
   const search = searchParams.get('search') ?? ''
   const status = searchParams.get('status') ?? ''
+  const department = searchParams.get('department') ?? ''
   const sortBy = searchParams.get('sort_by') ?? ''
   const sortDirection = searchParams.get('sort_direction') ?? ''
 
@@ -54,6 +55,7 @@ export default function ContactsPage() {
           per_page: perPage,
           ...(search && { search }),
           ...(status && { status }),
+          ...(department && { department }),
           ...(sortBy && { sort_by: sortBy }),
           ...(sortDirection && { sort_direction: sortDirection }),
         },
@@ -71,7 +73,7 @@ export default function ContactsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, perPage, search, status, sortBy, sortDirection])
+  }, [page, perPage, search, status, department, sortBy, sortDirection])
 
   useEffect(() => {
     fetchContacts()
@@ -97,6 +99,21 @@ export default function ContactsPage() {
       id: 'job_title',
       header: 'Job Title',
       cell: (row) => row.job_title || <span className="text-muted-foreground">—</span>,
+      meta: {
+        filterType: 'select',
+        filterKey: 'department',
+        filterPlaceholder: 'All Departments',
+        filterOptions: [
+          { value: 'Sales', label: 'Sales' },
+          { value: 'Marketing', label: 'Marketing' },
+          { value: 'Engineering', label: 'Engineering' },
+          { value: 'Finance', label: 'Finance' },
+          { value: 'HR', label: 'HR' },
+          { value: 'Operations', label: 'Operations' },
+          { value: 'Support', label: 'Support' },
+          { value: 'Management', label: 'Management' },
+        ],
+      },
     },
     {
       id: 'email',
@@ -148,6 +165,24 @@ export default function ContactsPage() {
         emptyDescription="Create your first contact to get started."
         searchPlaceholder="Search contacts..."
         storageKey="crm-contacts"
+        enableSelection
+        bulkActions={[
+          {
+            label: 'Delete Selected',
+            icon: <Trash2 className="h-3.5 w-3.5" />,
+            variant: 'destructive',
+            onClick: async (ids) => {
+              if (!confirm(`Delete ${ids.length} contact(s)?`)) return
+              try {
+                await api.post('/crm/contacts/bulk-delete', { ids })
+                toast.success(`${ids.length} contact(s) deleted`)
+                fetchContacts()
+              } catch {
+                toast.error('Failed to delete contacts')
+              }
+            },
+          },
+        ]}
       />
     </div>
   )

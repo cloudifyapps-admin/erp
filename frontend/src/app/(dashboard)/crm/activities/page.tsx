@@ -42,6 +42,7 @@ export default function ActivitiesPage() {
   const perPage = Number(searchParams.get('per_page') ?? 25)
   const search = searchParams.get('search') ?? ''
   const status = searchParams.get('status') ?? ''
+  const type = searchParams.get('type') ?? ''
   const sortBy = searchParams.get('sort_by') ?? ''
   const sortDirection = searchParams.get('sort_direction') ?? ''
 
@@ -54,6 +55,7 @@ export default function ActivitiesPage() {
           per_page: perPage,
           ...(search && { search }),
           ...(status && { status }),
+          ...(type && { type }),
           ...(sortBy && { sort_by: sortBy }),
           ...(sortDirection && { sort_direction: sortDirection }),
         },
@@ -71,7 +73,7 @@ export default function ActivitiesPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, perPage, search, status, sortBy, sortDirection])
+  }, [page, perPage, search, status, type, sortBy, sortDirection])
 
   useEffect(() => {
     fetchActivities()
@@ -84,6 +86,20 @@ export default function ActivitiesPage() {
       cell: (row) => (
         <span className="capitalize text-sm">{row.type?.replace(/_/g, ' ')}</span>
       ),
+      meta: {
+        filterType: 'select',
+        filterKey: 'type',
+        filterPlaceholder: 'All Types',
+        filterOptions: [
+          { value: 'call', label: 'Call' },
+          { value: 'email', label: 'Email' },
+          { value: 'meeting', label: 'Meeting' },
+          { value: 'task', label: 'Task' },
+          { value: 'note', label: 'Note' },
+          { value: 'follow_up', label: 'Follow Up' },
+          { value: 'demo', label: 'Demo' },
+        ],
+      },
     },
     {
       id: 'subject',

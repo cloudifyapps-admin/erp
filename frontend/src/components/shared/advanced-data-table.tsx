@@ -11,6 +11,7 @@ import {
   type ColumnOrderState,
   type VisibilityState,
   type SortingState,
+  type RowSelectionState,
 } from '@tanstack/react-table'
 import {
   DndContext,
@@ -116,6 +117,13 @@ export type ServerPaginationMeta = {
   pages: number
 }
 
+export type BulkAction = {
+  label: string
+  icon?: React.ReactNode
+  variant?: 'default' | 'destructive'
+  onClick: (selectedIds: (string | number)[]) => void | Promise<void>
+}
+
 export type AdvancedDataTableProps<T extends { id: string | number }> = {
   columns: ServerColumnDef<T>[]
   data: T[]
@@ -132,6 +140,10 @@ export type AdvancedDataTableProps<T extends { id: string | number }> = {
   storageKey?: string
   /** Title shown in the table header bar (e.g. "Leads") */
   title?: string
+  /** Enable row selection with checkboxes */
+  enableSelection?: boolean
+  /** Bulk actions shown when rows are selected */
+  bulkActions?: BulkAction[]
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +252,8 @@ export function AdvancedDataTable<T extends { id: string | number }>({
   enableSearch = true,
   storageKey = 'table',
   title,
+  enableSelection = false,
+  bulkActions = [],
 }: AdvancedDataTableProps<T>) {
   const router = useRouter()
   const pathname = usePathname()
@@ -249,6 +263,23 @@ export function AdvancedDataTable<T extends { id: string | number }>({
   // Delete state
   const [deleteId, setDeleteId] = useState<string | number | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+
+  // Row selection
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const selectedIds = useMemo(() => {
+    return Object.keys(rowSelection)
+      .filter((key) => rowSelection[key])
+      .map((key) => {
+        const row = data[parseInt(key)]
+        return row?.id
+      })
+      .filter(Boolean) as (string | number)[]
+  }, [rowSelection, data])
+
+  // Clear selection when data changes (e.g. page change, refresh)
+  useEffect(() => {
+    setRowSelection({})
+  }, [data])
 
   // Filter popover open
   const [filterOpen, setFilterOpen] = useState(false)
@@ -371,6 +402,32 @@ export function AdvancedDataTable<T extends { id: string | number }>({
   // Build tanstack columns
   const tanstackColumns: ColumnDef<T, unknown>[] = useMemo(
     () => [
+      // Selection checkbox column
+      ...(enableSelection
+        ? [
+            {
+              id: '_select',
+              header: ({ table: tbl }: { table: { getIsAllPageRowsSelected: () => boolean; getIsSomePageRowsSelected: () => boolean; toggleAllPageRowsSelected: (v: boolean) => void } }) => (
+                <Checkbox
+                  checked={tbl.getIsAllPageRowsSelected() || (tbl.getIsSomePageRowsSelected() && 'indeterminate')}
+                  onCheckedChange={(value) => tbl.toggleAllPageRowsSelected(!!value)}
+                  aria-label="Select all"
+                  className="translate-y-[2px]"
+                />
+              ),
+              cell: ({ row }: { row: { getIsSelected: () => boolean; toggleSelected: (v: boolean) => void; getCanSelect: () => boolean } }) => (
+                <Checkbox
+                  checked={row.getIsSelected()}
+                  onCheckedChange={(value) => row.toggleSelected(!!value)}
+                  aria-label="Select row"
+                  className="translate-y-[2px]"
+                />
+              ),
+              enableSorting: false,
+              enableHiding: false,
+            } as ColumnDef<T, unknown>,
+          ]
+        : []),
       ...columnDefs.map((col) => ({
         id: col.id,
         accessorKey: col.accessorKey ?? col.id,
@@ -443,15 +500,18 @@ export function AdvancedDataTable<T extends { id: string | number }>({
     columns: tanstackColumns,
     state: {
       columnVisibility,
-      columnOrder: [...columnOrder, '_actions'],
+      columnOrder: [...(enableSelection ? ['_select'] : []), ...columnOrder, '_actions'],
       sorting,
+      rowSelection,
     },
     onColumnVisibilityChange: setColumnVisibility,
     onColumnOrderChange: setColumnOrder,
+    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     manualSorting: true,
     pageCount: pagination.pages,
+    enableRowSelection: enableSelection,
   })
 
   // DnD sensors
@@ -707,6 +767,41 @@ export function AdvancedDataTable<T extends { id: string | number }>({
       </div>
 
       {/* ================================================================ */}
+      {/* BULK ACTION BAR                                                  */}
+      {/* ================================================================ */}
+      {enableSelection && selectedIds.length > 0 && (
+        <div className="flex items-center gap-3 px-6 py-3 border-b border-border/50 bg-primary/5">
+          <span className="text-sm font-medium text-primary">
+            {selectedIds.length} row{selectedIds.length !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center gap-2">
+            {bulkActions.map((action) => (
+              <Button
+                key={action.label}
+                variant={action.variant === 'destructive' ? 'destructive' : 'outline'}
+                size="sm"
+                className="h-8 rounded-lg px-3 text-xs font-medium gap-1.5"
+                onClick={() => action.onClick(selectedIds)}
+              >
+                {action.icon}
+                {action.label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-3 text-xs text-muted-foreground"
+            onClick={() => setRowSelection({})}
+          >
+            <X className="h-3.5 w-3.5 mr-1" />
+            Clear selection
+          </Button>
+        </div>
+      )}
+
+      {/* ================================================================ */}
       {/* TABLE                                                            */}
       {/* ================================================================ */}
       <div className={cn('overflow-x-auto transition-opacity duration-150', loading && data.length > 0 && 'opacity-50 pointer-events-none')}>
@@ -716,7 +811,7 @@ export function AdvancedDataTable<T extends { id: string | number }>({
               <TableRow key={headerGroup.id} className="hover:bg-transparent border-b border-border/40">
                 {headerGroup.headers.map((header) => {
                   const colDef = columnDefs.find((c) => c.id === header.id)
-                  const isSortable = colDef?.enableSorting !== false && header.id !== '_actions'
+                  const isSortable = colDef?.enableSorting !== false && header.id !== '_actions' && header.id !== '_select'
                   const isSorted = currentSortBy === header.id
                   const sortDir = isSorted ? currentSortDir : null
 
@@ -725,6 +820,7 @@ export function AdvancedDataTable<T extends { id: string | number }>({
                       key={header.id}
                       className={cn(
                         'h-11 px-6 first:pl-6 last:pr-6',
+                        header.id === '_select' && 'w-12 px-4',
                         header.id === '_actions' && 'w-12',
                         colDef?.meta?.headerClassName
                       )}

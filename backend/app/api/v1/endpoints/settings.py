@@ -43,6 +43,11 @@ from app.models.tenant_models import (
     DocumentCategory,
     Salutation,
     LeaveType,
+    Industry,
+    CustomerRating,
+    LostReason,
+    Competitor,
+    Territory,
 )
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -70,6 +75,11 @@ MASTER_DATA_REGISTRY: dict[str, tuple] = {
     "document-categories": (DocumentCategory, ["name"],                 True),
     "salutations":         (Salutation,       ["name"],                 False),
     "leave-types":         (LeaveType,        ["name"],                 False),
+    "industries":          (Industry,         ["name"],                 True),
+    "customer-ratings":    (CustomerRating,   ["name"],                 True),
+    "lost-reasons":        (LostReason,       ["name"],                 True),
+    "competitors":         (Competitor,       ["name"],                 True),
+    "territories":         (Territory,        ["name"],                 True),
 }
 
 
@@ -275,6 +285,38 @@ MASTER_DATA_DEFAULTS: dict[str, list[dict]] = {
         {"name": "Policies", "sort_order": 5},
         {"name": "Templates", "sort_order": 6},
         {"name": "Other", "sort_order": 7},
+    ],
+    "industries": [
+        {"name": "Technology", "slug": "technology", "sort_order": 1},
+        {"name": "Healthcare", "slug": "healthcare", "sort_order": 2},
+        {"name": "Financial Services", "slug": "financial-services", "sort_order": 3},
+        {"name": "Manufacturing", "slug": "manufacturing", "sort_order": 4},
+        {"name": "Retail & E-Commerce", "slug": "retail-ecommerce", "sort_order": 5},
+        {"name": "Education", "slug": "education", "sort_order": 6},
+        {"name": "Real Estate", "slug": "real-estate", "sort_order": 7},
+        {"name": "Telecommunications", "slug": "telecommunications", "sort_order": 8},
+        {"name": "Energy & Utilities", "slug": "energy-utilities", "sort_order": 9},
+        {"name": "Professional Services", "slug": "professional-services", "sort_order": 10},
+        {"name": "Media & Entertainment", "slug": "media-entertainment", "sort_order": 11},
+        {"name": "Transportation & Logistics", "slug": "transportation-logistics", "sort_order": 12},
+        {"name": "Government", "slug": "government", "sort_order": 13},
+        {"name": "Non-Profit", "slug": "non-profit", "sort_order": 14},
+        {"name": "Other", "slug": "other", "sort_order": 15},
+    ],
+    "customer-ratings": [
+        {"name": "Hot", "slug": "hot", "color": "#ef4444", "sort_order": 1},
+        {"name": "Warm", "slug": "warm", "color": "#f59e0b", "sort_order": 2},
+        {"name": "Cold", "slug": "cold", "color": "#3b82f6", "sort_order": 3},
+    ],
+    "lost-reasons": [
+        {"name": "Price too high", "slug": "price-too-high", "sort_order": 1},
+        {"name": "Went with competitor", "slug": "competitor", "sort_order": 2},
+        {"name": "No budget", "slug": "no-budget", "sort_order": 3},
+        {"name": "No decision made", "slug": "no-decision", "sort_order": 4},
+        {"name": "Poor timing", "slug": "poor-timing", "sort_order": 5},
+        {"name": "Feature gap", "slug": "feature-gap", "sort_order": 6},
+        {"name": "Lost contact", "slug": "lost-contact", "sort_order": 7},
+        {"name": "Other", "slug": "other", "sort_order": 8},
     ],
     "salutations": [
         {"name": "Mr."},

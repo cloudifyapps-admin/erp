@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2, User, Info, Tag, FileText, Plus, X } from 'lucide-react'
+import { Loader2, User, Info, Tag, FileText, Plus, X, Target } from 'lucide-react'
 import api from '@/lib/api'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+
+interface DropdownOption {
+  id: number
+  name: string
+}
 
 interface LeadForm {
   title: string
@@ -36,6 +41,11 @@ interface LeadForm {
   industry: string
   annual_revenue: string
   number_of_employees: string
+  industry_id: string
+  rating_id: string
+  campaign_id: string
+  territory_id: string
+  next_follow_up_at: string
   address_line1: string
   address_line2: string
   city: string
@@ -67,6 +77,11 @@ const INITIAL: LeadForm = {
   industry: '',
   annual_revenue: '',
   number_of_employees: '',
+  industry_id: '',
+  rating_id: '',
+  campaign_id: '',
+  territory_id: '',
+  next_follow_up_at: '',
   address_line1: '',
   address_line2: '',
   city: '',
@@ -139,6 +154,10 @@ export default function NewLeadPage() {
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof LeadForm, string>>>({})
   const [customFields, setCustomFields] = useState<CustomField[]>([])
+  const [industries, setIndustries] = useState<DropdownOption[]>([])
+  const [ratings, setRatings] = useState<DropdownOption[]>([])
+  const [campaigns, setCampaigns] = useState<DropdownOption[]>([])
+  const [territories, setTerritories] = useState<DropdownOption[]>([])
 
   useEffect(() => {
     api
@@ -149,6 +168,11 @@ export default function NewLeadPage() {
         }
       })
       .catch(() => {/* numbering optional */})
+
+    api.get('/settings/master-data/industries').then(({ data }) => setIndustries(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/customer-ratings').then(({ data }) => setRatings(data.items ?? [])).catch(() => {})
+    api.get('/crm/campaigns').then(({ data }) => setCampaigns(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/territories').then(({ data }) => setTerritories(data.items ?? [])).catch(() => {})
   }, [])
 
   const set =
@@ -200,8 +224,15 @@ export default function NewLeadPage() {
       const payload = {
         ...form,
         assigned_to: form.assigned_to ? parseInt(form.assigned_to) : null,
-        salutation_id: (form as Record<string, unknown>).salutation_id || null,
-        country_id: (form as Record<string, unknown>).country_id || null,
+        salutation_id: (form as unknown as Record<string, unknown>).salutation_id || null,
+        country_id: (form as unknown as Record<string, unknown>).country_id || null,
+        industry_id: form.industry_id ? parseInt(form.industry_id) : null,
+        rating_id: form.rating_id ? parseInt(form.rating_id) : null,
+        campaign_id: form.campaign_id ? parseInt(form.campaign_id) : null,
+        territory_id: form.territory_id ? parseInt(form.territory_id) : null,
+        annual_revenue: form.annual_revenue ? parseFloat(form.annual_revenue) : null,
+        number_of_employees: form.number_of_employees ? parseInt(form.number_of_employees) : null,
+        next_follow_up_at: form.next_follow_up_at || null,
         custom_fields: Object.keys(customData).length > 0 ? customData : null,
       }
       await api.post('/crm/leads', payload)
@@ -263,6 +294,10 @@ export default function NewLeadPage() {
                 <TabsTrigger value="classification" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
                   <Tag className="h-[18px] w-[18px]" />
                   Classification
+                </TabsTrigger>
+                <TabsTrigger value="crm" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Target className="h-[18px] w-[18px]" />
+                  CRM
                 </TabsTrigger>
                 <TabsTrigger value="additional" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
                   <Info className="h-[18px] w-[18px]" />
@@ -396,6 +431,75 @@ export default function NewLeadPage() {
               </FormRow>
             </TabsContent>
 
+            {/* Tab: CRM — campaign, territory, rating, follow-up */}
+            <TabsContent value="crm" className="p-6 lg:px-8 lg:py-2">
+              <FormRow label="Industry">
+                <Select value={form.industry_id} onValueChange={setSelect('industry_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select industry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {industries.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Rating">
+                <Select value={form.rating_id} onValueChange={setSelect('rating_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select rating" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ratings.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Campaign">
+                <Select value={form.campaign_id} onValueChange={setSelect('campaign_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select campaign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {campaigns.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Territory">
+                <Select value={form.territory_id} onValueChange={setSelect('territory_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select territory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {territories.map((o) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Next Follow Up">
+                <Input
+                  id="next_follow_up_at"
+                  type="datetime-local"
+                  value={form.next_follow_up_at}
+                  onChange={set('next_follow_up_at')}
+                  className="h-10"
+                />
+              </FormRow>
+            </TabsContent>
+
             {/* Tab: Additional Information — fixed fields + dynamic key-value pairs */}
             <TabsContent value="additional" className="p-6 lg:px-8 lg:py-2">
               <FormRow label="Website">
@@ -424,15 +528,17 @@ export default function NewLeadPage() {
               <FormRow label="Annual Revenue">
                 <Input
                   id="annual_revenue"
+                  type="number"
                   value={form.annual_revenue}
                   onChange={set('annual_revenue')}
-                  placeholder="$0.00"
+                  placeholder="0.00"
                   className="h-10"
                 />
               </FormRow>
               <FormRow label="No. of Employees">
                 <Input
                   id="number_of_employees"
+                  type="number"
                   value={form.number_of_employees}
                   onChange={set('number_of_employees')}
                   placeholder="e.g. 50"

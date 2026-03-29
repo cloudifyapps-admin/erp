@@ -19,6 +19,11 @@ import {
   Activity,
   ListChecks,
   UserCircle,
+  Building2,
+  Star,
+  XCircle,
+  Swords,
+  Map,
 } from 'lucide-react';
 
 const MASTER_DATA_TYPES = [
@@ -38,6 +43,11 @@ const MASTER_DATA_TYPES = [
   { value: 'activity-types', label: 'Activity Types', description: 'Types of CRM activities', icon: Activity, color: 'bg-rose-500/10 text-rose-600' },
   { value: 'task-statuses', label: 'Task Statuses', description: 'Define project task statuses', icon: ListChecks, color: 'bg-lime-500/10 text-lime-600' },
   { value: 'salutations', label: 'Salutations', description: 'Manage contact salutations', icon: UserCircle, color: 'bg-slate-500/10 text-slate-600' },
+  { value: 'industries', label: 'Industries', description: 'Classify leads and customers by industry vertical', icon: Building2, color: 'bg-blue-500/10 text-blue-600' },
+  { value: 'customer-ratings', label: 'Customer Ratings', description: 'Rate customers as Hot, Warm, or Cold', icon: Star, color: 'bg-amber-500/10 text-amber-600' },
+  { value: 'lost-reasons', label: 'Lost Reasons', description: 'Track why opportunities were lost', icon: XCircle, color: 'bg-red-500/10 text-red-600' },
+  { value: 'competitors', label: 'Competitors', description: 'Track competitive landscape information', icon: Swords, color: 'bg-orange-500/10 text-orange-600' },
+  { value: 'territories', label: 'Territories', description: 'Define geographic or account territories', icon: Map, color: 'bg-teal-500/10 text-teal-600' },
 ];
 
 export default function MasterDataPage() {

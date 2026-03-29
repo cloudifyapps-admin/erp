@@ -3,7 +3,8 @@
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { User, MapPin, Truck, Settings as SettingsIcon, Info, FileText, Plus, X, Loader2 } from 'lucide-react'
+import { User, MapPin, Truck, Settings as SettingsIcon, Info, FileText, Plus, X, Loader2, Clock } from 'lucide-react'
+import { AuditTimeline } from '@/components/shared/audit-timeline'
 import api from '@/lib/api'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -44,11 +45,22 @@ interface CustomerForm {
   shipping_state: string
   shipping_postal_code: string
   shipping_country: string
+  // Classification
+  industry_id: string
+  rating_id: string
+  territory_id: string
+  annual_revenue: string
+  employee_count: string
   // Settings
   currency: string
   payment_terms: string
   credit_limit: string
   price_list: string
+}
+
+interface MasterDataOption {
+  id: number
+  name: string
 }
 
 interface CustomField {
@@ -78,6 +90,11 @@ const INITIAL: CustomerForm = {
   shipping_state: '',
   shipping_postal_code: '',
   shipping_country: '',
+  industry_id: '',
+  rating_id: '',
+  territory_id: '',
+  annual_revenue: '',
+  employee_count: '',
   currency: 'USD',
   payment_terms: 'net30',
   credit_limit: '',
@@ -112,6 +129,15 @@ export default function EditCustomerPage({
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof CustomerForm, string>>>({})
   const [customFields, setCustomFields] = useState<CustomField[]>([])
+  const [industries, setIndustries] = useState<MasterDataOption[]>([])
+  const [ratings, setRatings] = useState<MasterDataOption[]>([])
+  const [territories, setTerritories] = useState<MasterDataOption[]>([])
+
+  useEffect(() => {
+    api.get('/settings/master-data/industries').then(({ data }) => setIndustries(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/customer-ratings').then(({ data }) => setRatings(data.items ?? [])).catch(() => {})
+    api.get('/settings/master-data/territories').then(({ data }) => setTerritories(data.items ?? [])).catch(() => {})
+  }, [])
 
   useEffect(() => {
     api
@@ -138,6 +164,11 @@ export default function EditCustomerPage({
           shipping_state: data.shipping_state ?? '',
           shipping_postal_code: data.shipping_postal_code ?? '',
           shipping_country: data.shipping_country ?? '',
+          industry_id: data.industry_id != null ? String(data.industry_id) : '',
+          rating_id: data.rating_id != null ? String(data.rating_id) : '',
+          territory_id: data.territory_id != null ? String(data.territory_id) : '',
+          annual_revenue: data.annual_revenue != null ? String(data.annual_revenue) : '',
+          employee_count: data.employee_count != null ? String(data.employee_count) : '',
           currency: data.currency ?? 'USD',
           payment_terms: data.payment_terms ?? 'net30',
           credit_limit: data.credit_limit != null ? String(data.credit_limit) : '',
@@ -213,6 +244,11 @@ export default function EditCustomerPage({
       })
       const payload = {
         ...form,
+        industry_id: form.industry_id ? Number(form.industry_id) : null,
+        rating_id: form.rating_id ? Number(form.rating_id) : null,
+        territory_id: form.territory_id ? Number(form.territory_id) : null,
+        annual_revenue: form.annual_revenue ? Number(form.annual_revenue) : null,
+        employee_count: form.employee_count ? Number(form.employee_count) : null,
         credit_limit: form.credit_limit ? Number(form.credit_limit) : null,
         custom_fields: Object.keys(customData).length > 0 ? customData : null,
       }
@@ -301,6 +337,10 @@ export default function EditCustomerPage({
                 <TabsTrigger value="notes" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
                   <FileText className="h-[18px] w-[18px]" />
                   Notes
+                </TabsTrigger>
+                <TabsTrigger value="timeline" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Clock className="h-[18px] w-[18px]" />
+                  Timeline
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -393,6 +433,66 @@ export default function EditCustomerPage({
                   value={form.tax_id}
                   onChange={set('tax_id')}
                   placeholder="12-3456789"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Industry">
+                <Select value={form.industry_id} onValueChange={setSelect('industry_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select industry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {industries.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Rating">
+                <Select value={form.rating_id} onValueChange={setSelect('rating_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select rating" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ratings.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Territory">
+                <Select value={form.territory_id} onValueChange={setSelect('territory_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select territory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {territories.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormRow>
+              <FormRow label="Annual Revenue">
+                <Input
+                  id="annual_revenue"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.annual_revenue}
+                  onChange={set('annual_revenue')}
+                  placeholder="1000000.00"
+                  className="h-10"
+                />
+              </FormRow>
+              <FormRow label="Employee Count">
+                <Input
+                  id="employee_count"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.employee_count}
+                  onChange={set('employee_count')}
+                  placeholder="50"
                   className="h-10"
                 />
               </FormRow>
@@ -625,6 +725,11 @@ export default function EditCustomerPage({
                 rows={10}
                 className="resize-none"
               />
+            </TabsContent>
+
+            {/* Tab: Timeline */}
+            <TabsContent value="timeline" className="p-6 lg:px-8 lg:py-4">
+              <AuditTimeline entityType="customers" entityId={Number(id)} />
             </TabsContent>
           </Tabs>
         </div>

@@ -3,7 +3,9 @@
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Loader2, User, Info, Tag, FileText, Plus, X } from 'lucide-react'
+import { Loader2, User, Info, Tag, FileText, Plus, X, Clock } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { AuditTimeline } from '@/components/shared/audit-timeline'
 import api from '@/lib/api'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
@@ -28,6 +30,9 @@ interface ContactForm {
   mobile: string
   company: string
   job_title: string
+  department: string
+  do_not_email: boolean
+  do_not_call: boolean
   status: string
   notes: string
 }
@@ -46,6 +51,9 @@ const INITIAL: ContactForm = {
   mobile: '',
   company: '',
   job_title: '',
+  department: '',
+  do_not_email: false,
+  do_not_call: false,
   status: 'active',
   notes: '',
 }
@@ -91,6 +99,9 @@ export default function EditContactPage({
           mobile: data.mobile ?? '',
           company: data.company ?? '',
           job_title: data.job_title ?? '',
+          department: data.department ?? '',
+          do_not_email: data.do_not_email ?? false,
+          do_not_call: data.do_not_call ?? false,
           status: data.status ?? 'active',
           notes: data.notes ?? '',
         })
@@ -235,6 +246,10 @@ export default function EditContactPage({
                   <FileText className="h-[18px] w-[18px]" />
                   Notes
                 </TabsTrigger>
+                <TabsTrigger value="timeline" className="gap-2.5 px-5 py-3.5 text-[14px] cursor-pointer data-active:font-semibold">
+                  <Clock className="h-[18px] w-[18px]" />
+                  Timeline
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -307,6 +322,15 @@ export default function EditContactPage({
                   className="h-10"
                 />
               </FormRow>
+              <FormRow label="Department">
+                <Input
+                  id="department"
+                  value={form.department}
+                  onChange={set('department')}
+                  placeholder="Engineering"
+                  className="h-10"
+                />
+              </FormRow>
             </TabsContent>
 
             {/* Tab: Classification */}
@@ -322,6 +346,22 @@ export default function EditContactPage({
                     <SelectItem value="archived">Archived</SelectItem>
                   </SelectContent>
                 </Select>
+              </FormRow>
+              <FormRow label="Do Not Email">
+                <div className="flex items-center h-10">
+                  <Switch
+                    checked={form.do_not_email}
+                    onCheckedChange={(checked: boolean) => setForm((f) => ({ ...f, do_not_email: checked }))}
+                  />
+                </div>
+              </FormRow>
+              <FormRow label="Do Not Call">
+                <div className="flex items-center h-10">
+                  <Switch
+                    checked={form.do_not_call}
+                    onCheckedChange={(checked: boolean) => setForm((f) => ({ ...f, do_not_call: checked }))}
+                  />
+                </div>
               </FormRow>
             </TabsContent>
 
@@ -387,6 +427,11 @@ export default function EditContactPage({
                 rows={10}
                 className="resize-none"
               />
+            </TabsContent>
+
+            {/* Tab: Timeline */}
+            <TabsContent value="timeline" className="p-6 lg:px-8 lg:py-4">
+              <AuditTimeline entityType="contacts" entityId={Number(id)} />
             </TabsContent>
           </Tabs>
         </div>

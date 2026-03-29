@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1.endpoints import auth, crm, sales, purchase, inventory, projects, hr, documents, tickets, settings as settings_router, utility
+from app.api.v1.endpoints import auth, crm, crm_analytics, sales, purchase, inventory, projects, hr, documents, tickets, settings as settings_router, utility
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -24,6 +24,7 @@ app.add_middleware(
 api_prefix = "/api"
 app.include_router(auth.router, prefix=api_prefix)
 app.include_router(crm.router, prefix=api_prefix)
+app.include_router(crm_analytics.router, prefix=api_prefix)
 app.include_router(sales.router, prefix=api_prefix)
 app.include_router(purchase.router, prefix=api_prefix)
 app.include_router(inventory.router, prefix=api_prefix)
