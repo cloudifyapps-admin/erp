@@ -25,6 +25,8 @@ import {
   Plus, Trash2, Loader2, Sparkles, Shield, ShieldCheck, ShieldAlert,
   Lock, Users2, Search, ChevronDown, ChevronRight, Check,
   Package, FolderKanban, UserCog, Ticket, Settings, ShoppingCart,
+  FileText, BarChart3, Megaphone, ClipboardList, Truck, Receipt,
+  Building2, CalendarDays, DollarSign, Star, Wallet, Archive,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -41,6 +43,7 @@ interface Role {
   name: string
   description: string
   permissions: string[]
+  permissions_count: number
   member_count: number
   is_system: boolean
 }
@@ -48,54 +51,158 @@ interface Role {
 /* ── Permission Data ───────────────────────────────────────────────── */
 
 const ALL_PERMISSIONS: Permission[] = [
+  // CRM
+  { key: 'leads:view', label: 'View Leads', category: 'CRM' },
+  { key: 'leads:create', label: 'Create Leads', category: 'CRM' },
+  { key: 'leads:edit', label: 'Edit Leads', category: 'CRM' },
+  { key: 'leads:delete', label: 'Delete Leads', category: 'CRM' },
+  { key: 'contacts:view', label: 'View Contacts', category: 'CRM' },
+  { key: 'contacts:create', label: 'Create Contacts', category: 'CRM' },
+  { key: 'contacts:edit', label: 'Edit Contacts', category: 'CRM' },
+  { key: 'contacts:delete', label: 'Delete Contacts', category: 'CRM' },
+  { key: 'customers:view', label: 'View Customers', category: 'CRM' },
+  { key: 'customers:create', label: 'Create Customers', category: 'CRM' },
+  { key: 'customers:edit', label: 'Edit Customers', category: 'CRM' },
+  { key: 'customers:delete', label: 'Delete Customers', category: 'CRM' },
+  { key: 'opportunities:view', label: 'View Opportunities', category: 'CRM' },
+  { key: 'opportunities:create', label: 'Create Opportunities', category: 'CRM' },
+  { key: 'opportunities:edit', label: 'Edit Opportunities', category: 'CRM' },
+  { key: 'opportunities:delete', label: 'Delete Opportunities', category: 'CRM' },
+  { key: 'activities:view', label: 'View Activities', category: 'CRM' },
+  { key: 'activities:create', label: 'Create Activities', category: 'CRM' },
+  { key: 'activities:edit', label: 'Edit Activities', category: 'CRM' },
+  { key: 'activities:delete', label: 'Delete Activities', category: 'CRM' },
+  { key: 'campaigns:view', label: 'View Campaigns', category: 'CRM' },
+  { key: 'campaigns:create', label: 'Create Campaigns', category: 'CRM' },
+  { key: 'campaigns:edit', label: 'Edit Campaigns', category: 'CRM' },
+  { key: 'campaigns:delete', label: 'Delete Campaigns', category: 'CRM' },
+  // Sales
+  { key: 'quotations:view', label: 'View Quotations', category: 'Sales' },
+  { key: 'quotations:create', label: 'Create Quotations', category: 'Sales' },
+  { key: 'quotations:edit', label: 'Edit Quotations', category: 'Sales' },
+  { key: 'quotations:delete', label: 'Delete Quotations', category: 'Sales' },
+  { key: 'sales-orders:view', label: 'View Sales Orders', category: 'Sales' },
+  { key: 'sales-orders:create', label: 'Create Sales Orders', category: 'Sales' },
+  { key: 'sales-orders:edit', label: 'Edit Sales Orders', category: 'Sales' },
+  { key: 'sales-orders:delete', label: 'Delete Sales Orders', category: 'Sales' },
+  { key: 'deliveries:view', label: 'View Deliveries', category: 'Sales' },
+  { key: 'deliveries:create', label: 'Create Deliveries', category: 'Sales' },
+  { key: 'deliveries:edit', label: 'Edit Deliveries', category: 'Sales' },
+  { key: 'deliveries:delete', label: 'Delete Deliveries', category: 'Sales' },
+  { key: 'invoices:view', label: 'View Invoices', category: 'Sales' },
+  { key: 'invoices:create', label: 'Create Invoices', category: 'Sales' },
+  { key: 'invoices:edit', label: 'Edit Invoices', category: 'Sales' },
+  { key: 'invoices:delete', label: 'Delete Invoices', category: 'Sales' },
   // Purchase
-  { key: 'purchase.vendors.view', label: 'View Vendors', category: 'Purchase' },
-  { key: 'purchase.vendors.manage', label: 'Manage Vendors', category: 'Purchase' },
-  { key: 'purchase.orders.view', label: 'View Purchase Orders', category: 'Purchase' },
-  { key: 'purchase.orders.create', label: 'Create Purchase Orders', category: 'Purchase' },
-  { key: 'purchase.orders.approve', label: 'Approve Purchase Orders', category: 'Purchase' },
+  { key: 'vendors:view', label: 'View Vendors', category: 'Purchase' },
+  { key: 'vendors:create', label: 'Create Vendors', category: 'Purchase' },
+  { key: 'vendors:edit', label: 'Edit Vendors', category: 'Purchase' },
+  { key: 'vendors:delete', label: 'Delete Vendors', category: 'Purchase' },
+  { key: 'purchase-requests:view', label: 'View Purchase Requests', category: 'Purchase' },
+  { key: 'purchase-requests:create', label: 'Create Purchase Requests', category: 'Purchase' },
+  { key: 'purchase-requests:edit', label: 'Edit Purchase Requests', category: 'Purchase' },
+  { key: 'purchase-requests:delete', label: 'Delete Purchase Requests', category: 'Purchase' },
+  { key: 'purchase-orders:view', label: 'View Purchase Orders', category: 'Purchase' },
+  { key: 'purchase-orders:create', label: 'Create Purchase Orders', category: 'Purchase' },
+  { key: 'purchase-orders:edit', label: 'Edit Purchase Orders', category: 'Purchase' },
+  { key: 'purchase-orders:delete', label: 'Delete Purchase Orders', category: 'Purchase' },
+  { key: 'goods-receipts:view', label: 'View Goods Receipts', category: 'Purchase' },
+  { key: 'goods-receipts:create', label: 'Create Goods Receipts', category: 'Purchase' },
+  { key: 'goods-receipts:edit', label: 'Edit Goods Receipts', category: 'Purchase' },
+  { key: 'goods-receipts:delete', label: 'Delete Goods Receipts', category: 'Purchase' },
   // Inventory
-  { key: 'inventory.products.view', label: 'View Products', category: 'Inventory' },
-  { key: 'inventory.products.manage', label: 'Manage Products', category: 'Inventory' },
-  { key: 'inventory.stock.view', label: 'View Stock Levels', category: 'Inventory' },
-  { key: 'inventory.stock.adjust', label: 'Adjust Stock', category: 'Inventory' },
+  { key: 'products:view', label: 'View Products', category: 'Inventory' },
+  { key: 'products:create', label: 'Create Products', category: 'Inventory' },
+  { key: 'products:edit', label: 'Edit Products', category: 'Inventory' },
+  { key: 'products:delete', label: 'Delete Products', category: 'Inventory' },
+  { key: 'warehouses:view', label: 'View Warehouses', category: 'Inventory' },
+  { key: 'warehouses:create', label: 'Create Warehouses', category: 'Inventory' },
+  { key: 'warehouses:edit', label: 'Edit Warehouses', category: 'Inventory' },
+  { key: 'warehouses:delete', label: 'Delete Warehouses', category: 'Inventory' },
+  { key: 'stock-movements:view', label: 'View Stock Movements', category: 'Inventory' },
+  { key: 'stock-movements:create', label: 'Create Stock Movements', category: 'Inventory' },
+  { key: 'stock-adjustments:view', label: 'View Stock Adjustments', category: 'Inventory' },
+  { key: 'stock-adjustments:create', label: 'Create Stock Adjustments', category: 'Inventory' },
+  { key: 'stock-transfers:view', label: 'View Stock Transfers', category: 'Inventory' },
+  { key: 'stock-transfers:create', label: 'Create Stock Transfers', category: 'Inventory' },
   // Projects
-  { key: 'projects.view', label: 'View Projects', category: 'Projects' },
-  { key: 'projects.create', label: 'Create Projects', category: 'Projects' },
-  { key: 'projects.manage', label: 'Manage All Projects', category: 'Projects' },
+  { key: 'projects:view', label: 'View Projects', category: 'Projects' },
+  { key: 'projects:create', label: 'Create Projects', category: 'Projects' },
+  { key: 'projects:edit', label: 'Edit Projects', category: 'Projects' },
+  { key: 'projects:delete', label: 'Delete Projects', category: 'Projects' },
+  { key: 'tasks:view', label: 'View Tasks', category: 'Projects' },
+  { key: 'tasks:create', label: 'Create Tasks', category: 'Projects' },
+  { key: 'tasks:edit', label: 'Edit Tasks', category: 'Projects' },
+  { key: 'tasks:delete', label: 'Delete Tasks', category: 'Projects' },
+  { key: 'milestones:view', label: 'View Milestones', category: 'Projects' },
+  { key: 'milestones:create', label: 'Create Milestones', category: 'Projects' },
+  { key: 'milestones:edit', label: 'Edit Milestones', category: 'Projects' },
+  { key: 'milestones:delete', label: 'Delete Milestones', category: 'Projects' },
+  { key: 'time-logs:view', label: 'View Time Logs', category: 'Projects' },
+  { key: 'time-logs:create', label: 'Create Time Logs', category: 'Projects' },
+  { key: 'time-logs:edit', label: 'Edit Time Logs', category: 'Projects' },
+  { key: 'time-logs:delete', label: 'Delete Time Logs', category: 'Projects' },
   // HR
-  { key: 'hr.employees.view', label: 'View Employees', category: 'HR' },
-  { key: 'hr.employees.manage', label: 'Manage Employees', category: 'HR' },
-  { key: 'hr.payroll.view', label: 'View Payroll', category: 'HR' },
-  { key: 'hr.payroll.process', label: 'Process Payroll', category: 'HR' },
-  { key: 'hr.leave.approve', label: 'Approve Leave Requests', category: 'HR' },
+  { key: 'employees:view', label: 'View Employees', category: 'HR' },
+  { key: 'employees:create', label: 'Create Employees', category: 'HR' },
+  { key: 'employees:edit', label: 'Edit Employees', category: 'HR' },
+  { key: 'employees:delete', label: 'Delete Employees', category: 'HR' },
+  { key: 'departments:view', label: 'View Departments', category: 'HR' },
+  { key: 'departments:create', label: 'Create Departments', category: 'HR' },
+  { key: 'departments:edit', label: 'Edit Departments', category: 'HR' },
+  { key: 'departments:delete', label: 'Delete Departments', category: 'HR' },
+  { key: 'attendance:view', label: 'View Attendance', category: 'HR' },
+  { key: 'attendance:create', label: 'Record Attendance', category: 'HR' },
+  { key: 'attendance:edit', label: 'Edit Attendance', category: 'HR' },
+  { key: 'leave-requests:view', label: 'View Leave Requests', category: 'HR' },
+  { key: 'leave-requests:create', label: 'Create Leave Requests', category: 'HR' },
+  { key: 'leave-requests:edit', label: 'Approve Leave Requests', category: 'HR' },
+  { key: 'payroll:view', label: 'View Payroll', category: 'HR' },
+  { key: 'payroll:create', label: 'Process Payroll', category: 'HR' },
+  { key: 'payroll:edit', label: 'Edit Payroll', category: 'HR' },
+  { key: 'performance-reviews:view', label: 'View Reviews', category: 'HR' },
+  { key: 'performance-reviews:create', label: 'Create Reviews', category: 'HR' },
+  { key: 'performance-reviews:edit', label: 'Edit Reviews', category: 'HR' },
+  { key: 'expense-claims:view', label: 'View Expense Claims', category: 'HR' },
+  { key: 'expense-claims:create', label: 'Create Expense Claims', category: 'HR' },
+  { key: 'expense-claims:edit', label: 'Edit Expense Claims', category: 'HR' },
   // Support
-  { key: 'tickets.view', label: 'View Tickets', category: 'Support' },
-  { key: 'tickets.manage', label: 'Manage Tickets', category: 'Support' },
-  { key: 'tickets.assign', label: 'Assign Tickets', category: 'Support' },
+  { key: 'tickets:view', label: 'View Tickets', category: 'Support' },
+  { key: 'tickets:create', label: 'Create Tickets', category: 'Support' },
+  { key: 'tickets:edit', label: 'Edit Tickets', category: 'Support' },
+  { key: 'tickets:delete', label: 'Delete Tickets', category: 'Support' },
+  // Documents
+  { key: 'documents:view', label: 'View Documents', category: 'Documents' },
+  { key: 'documents:create', label: 'Upload Documents', category: 'Documents' },
+  { key: 'documents:edit', label: 'Edit Documents', category: 'Documents' },
+  { key: 'documents:delete', label: 'Delete Documents', category: 'Documents' },
   // Settings
-  { key: 'settings.view', label: 'View Settings', category: 'Settings' },
-  { key: 'settings.manage', label: 'Manage Settings', category: 'Settings' },
-  { key: 'settings.roles', label: 'Manage Roles & Permissions', category: 'Settings' },
+  { key: 'settings:manage', label: 'Manage Settings', category: 'Settings' },
 ]
 
 const PERMISSION_CATEGORIES = [...new Set(ALL_PERMISSIONS.map((p) => p.category))]
 
 const CATEGORY_ICONS: Record<string, typeof Package> = {
+  CRM: BarChart3,
+  Sales: Receipt,
   Purchase: ShoppingCart,
   Inventory: Package,
   Projects: FolderKanban,
   HR: UserCog,
   Support: Ticket,
+  Documents: FileText,
   Settings: Settings,
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
+  CRM: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+  Sales: 'bg-green-500/10 text-green-600 dark:text-green-400',
   Purchase: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   Inventory: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   Projects: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
   HR: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   Support: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+  Documents: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
   Settings: 'bg-slate-500/10 text-slate-600 dark:text-slate-400',
 }
 
@@ -249,8 +356,9 @@ export default function TeamRolesPage() {
     }
   }
 
-  // Permission count for selected role
-  const permissionCount = selectedRole?.permissions?.length ?? 0
+  // Permission count for selected role (count only permissions shown in UI)
+  const allPermKeys = useMemo(() => new Set(ALL_PERMISSIONS.map(p => p.key)), [])
+  const permissionCount = selectedRole?.permissions?.filter(p => allPermKeys.has(p)).length ?? 0
   const totalPermissions = ALL_PERMISSIONS.length
 
   return (
@@ -324,11 +432,11 @@ export default function TeamRolesPage() {
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                           <Users2 className="size-3" />
-                          {role.member_count ?? 0} members
+                          {role.member_count ?? 0} {(role.member_count ?? 0) === 1 ? 'member' : 'members'}
                         </span>
                         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                           <ShieldCheck className="size-3" />
-                          {role.permissions?.length ?? 0} permissions
+                          {role.permissions_count ?? role.permissions?.length ?? 0} permissions
                         </span>
                       </div>
                     </div>
@@ -372,7 +480,7 @@ export default function TeamRolesPage() {
                         </Badge>
                         <Badge variant="outline" className="text-[11px] h-5 gap-1">
                           <Users2 className="size-3" />
-                          {selectedRole.member_count} members
+                          {selectedRole.member_count} {selectedRole.member_count === 1 ? 'member' : 'members'}
                         </Badge>
                       </div>
                     </div>

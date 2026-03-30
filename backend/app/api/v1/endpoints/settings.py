@@ -867,15 +867,38 @@ async def list_team_roles(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
 ):
-    from sqlalchemy import func
-
     svc = CRUDService(Role)
     skip, limit = _paginate(page, per_page)
     items, total = await svc.get_list(
         db, tenant_id, skip=skip, limit=limit,
         search=search, search_fields=["name"],
     )
-    return _list_response([_row_to_dict(i) for i in items], total, page, per_page)
+    role_ids = [i.id for i in items]
+    # Count members per role
+    member_counts: dict[int, int] = {}
+    if role_ids:
+        result = await db.execute(
+            select(UserRole.role_id, func.count(UserRole.id))
+            .where(UserRole.role_id.in_(role_ids), UserRole.tenant_id == tenant_id)
+            .group_by(UserRole.role_id)
+        )
+        member_counts = dict(result.all())
+    # Count permissions per role
+    perm_counts: dict[int, int] = {}
+    if role_ids:
+        result = await db.execute(
+            select(RolePermission.role_id, func.count(RolePermission.id))
+            .where(RolePermission.role_id.in_(role_ids))
+            .group_by(RolePermission.role_id)
+        )
+        perm_counts = dict(result.all())
+    data = []
+    for i in items:
+        d = _row_to_dict(i)
+        d["member_count"] = member_counts.get(i.id, 0)
+        d["permissions_count"] = perm_counts.get(i.id, 0)
+        data.append(d)
+    return _list_response(data, total, page, per_page)
 
 
 @router.get("/team-roles/{id}")
@@ -896,6 +919,12 @@ async def get_team_role(
         ).where(RolePermission.role_id == id)
     )
     role_data["permissions"] = [r[0] for r in result.all()]
+    # Get member count
+    result = await db.execute(
+        select(func.count(UserRole.id))
+        .where(UserRole.role_id == id, UserRole.tenant_id == tenant_id)
+    )
+    role_data["member_count"] = result.scalar() or 0
     return role_data
 
 
@@ -906,7 +935,11 @@ async def create_team_role(
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
 ):
+    import re
     permissions = data.pop("permissions", [])
+    # Auto-generate slug from name if not provided
+    if not data.get("slug"):
+        data["slug"] = re.sub(r"[^a-z0-9]+", "-", data.get("name", "").lower()).strip("-")
     svc = CRUDService(Role)
     obj = await svc.create(db, data, tenant_id, user.id)
     await db.flush()
@@ -916,13 +949,14 @@ async def create_team_role(
             select(Permission).where(Permission.slug.in_(permissions))
         )
         for perm in perm_result.scalars().all():
-            db.add(RolePermission(role_id=obj.id, permission_id=perm.id, tenant_id=tenant_id))
+            db.add(RolePermission(role_id=obj.id, permission_id=perm.id))
     await db.commit()
     await db.refresh(obj)
     return _row_to_dict(obj)
 
 
 @router.put("/team-roles/{id}")
+@router.patch("/team-roles/{id}")
 async def update_team_role(
     id: int,
     data: dict,
@@ -949,7 +983,7 @@ async def update_team_role(
             select(Permission).where(Permission.slug.in_(permissions))
         )
         for perm in perm_result.scalars().all():
-            db.add(RolePermission(role_id=obj.id, permission_id=perm.id, tenant_id=tenant_id))
+            db.add(RolePermission(role_id=obj.id, permission_id=perm.id))
 
     await db.commit()
     await db.refresh(obj)
