@@ -171,9 +171,10 @@ export default function NewOpportunityPage() {
       customFields.forEach((cf) => {
         if (cf.key.trim()) customData[cf.key.trim()] = cf.value
       })
+      const { value: _value, ...formRest } = form
       const payload = {
-        ...form,
-        value: form.value ? Number(form.value) : null,
+        ...formRest,
+        expected_amount: form.value ? Number(form.value) : null,
         probability: form.probability ? Number(form.probability) : null,
         assigned_to: form.assigned_to ? parseInt(form.assigned_to) : null,
         expected_close_date: form.expected_close_date || null,

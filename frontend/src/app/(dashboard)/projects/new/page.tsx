@@ -32,8 +32,8 @@ interface ProjectForm {
   name: string
   code: string
   description: string
-  client_name: string
-  manager_email: string
+  customer_id: string
+  manager_id: string
   start_date: string
   end_date: string
   budget: string
@@ -42,6 +42,12 @@ interface ProjectForm {
   status: string
   priority: string
   category_id: string
+}
+
+interface SelectOption {
+  id: number
+  name: string
+  email?: string
 }
 
 interface ProjectCategory {
@@ -67,8 +73,8 @@ const INITIAL: ProjectForm = {
   name: '',
   code: '',
   description: '',
-  client_name: '',
-  manager_email: '',
+  customer_id: '',
+  manager_id: '',
   start_date: new Date().toISOString().split('T')[0],
   end_date: '',
   budget: '',
@@ -112,6 +118,8 @@ export default function NewProjectPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof ProjectForm, string>>>({})
   const [customFields, setCustomFields] = useState<CustomField[]>([])
   const [categories, setCategories] = useState<ProjectCategory[]>([])
+  const [customers, setCustomers] = useState<SelectOption[]>([])
+  const [teamMembers, setTeamMembers] = useState<SelectOption[]>([])
   const [templates, setTemplates] = useState<ProjectTemplate[]>([])
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
@@ -131,6 +139,20 @@ export default function NewProjectPage() {
       .then(({ data }) => {
         const items = normalizePaginated<ProjectTemplate>(data).items
         setTemplates(items)
+      })
+      .catch(() => {})
+    api
+      .get('/crm/customers', { params: { per_page: 100 } })
+      .then(({ data }) => {
+        const items = normalizePaginated<SelectOption>(data).items
+        setCustomers(items)
+      })
+      .catch(() => {})
+    api
+      .get('/settings/team-members', { params: { per_page: 100 } })
+      .then(({ data }) => {
+        const items = normalizePaginated<SelectOption>(data).items
+        setTeamMembers(items)
       })
       .catch(() => {})
   }, [])
@@ -205,8 +227,8 @@ export default function NewProjectPage() {
         name: form.name,
         code: form.code || null,
         description: form.description || null,
-        client_name: form.client_name || null,
-        manager_email: form.manager_email || null,
+        customer_id: form.customer_id && form.customer_id !== '__none__' ? parseInt(form.customer_id) : null,
+        manager_id: form.manager_id && form.manager_id !== '__none__' ? parseInt(form.manager_id) : null,
         start_date: form.start_date || null,
         end_date: form.end_date || null,
         budget: form.budget ? parseFloat(form.budget) : null,
@@ -314,23 +336,34 @@ export default function NewProjectPage() {
                 />
               </FormRow>
               <FormRow label="Client">
-                <Input
-                  id="client_name"
-                  value={form.client_name}
-                  onChange={set('client_name')}
-                  placeholder="Acme Corp"
-                  className="h-10"
-                />
+                <Select value={form.customer_id} onValueChange={setSelect('customer_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {customers.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FormRow>
-              <FormRow label="Manager Email">
-                <Input
-                  id="manager_email"
-                  type="email"
-                  value={form.manager_email}
-                  onChange={set('manager_email')}
-                  placeholder="manager@example.com"
-                  className="h-10"
-                />
+              <FormRow label="Manager">
+                <Select value={form.manager_id} onValueChange={setSelect('manager_id')}>
+                  <SelectTrigger className="w-full h-10">
+                    <SelectValue placeholder="Select manager" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {teamMembers.map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)}>
+                        {m.name} {m.email ? `(${m.email})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FormRow>
               <FormRow label="Category">
                 <Select value={form.category_id} onValueChange={setSelect('category_id')}>

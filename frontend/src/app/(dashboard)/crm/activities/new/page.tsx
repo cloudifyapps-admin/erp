@@ -20,7 +20,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 interface ActivityForm {
-  title: string
+  subject: string
   type: string
   status: string
   date: string
@@ -38,7 +38,7 @@ interface CustomField {
 }
 
 const INITIAL: ActivityForm = {
-  title: '',
+  subject: '',
   type: 'call',
   status: 'planned',
   date: '',
@@ -116,7 +116,7 @@ export default function NewActivityPage() {
 
   const validate = (): boolean => {
     const errs: Partial<Record<keyof ActivityForm, string>> = {}
-    if (!form.title.trim()) errs.title = 'Title is required'
+    if (!form.subject.trim()) errs.subject = 'Subject is required'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -202,13 +202,13 @@ export default function NewActivityPage() {
 
             {/* Tab: Details */}
             <TabsContent value="details" className="p-6 lg:px-8 lg:py-2">
-              <FormRow label="Title" required error={errors.title}>
+              <FormRow label="Subject" required error={errors.subject}>
                 <Input
-                  id="title"
-                  value={form.title}
-                  onChange={set('title')}
+                  id="subject"
+                  value={form.subject}
+                  onChange={set('subject')}
                   placeholder="Follow up call with client"
-                  aria-invalid={!!errors.title}
+                  aria-invalid={!!errors.subject}
                   className="h-10"
                 />
               </FormRow>

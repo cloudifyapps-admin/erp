@@ -268,6 +268,7 @@ export default function LeadsPage() {
         editBasePath="/crm/leads"
         deleteEndpoint="/crm/leads"
         onDelete={fetchLeads}
+        onRowClick={(row: Record<string, unknown>) => router.push(`/crm/leads/${row.id}`)}
         emptyMessage="No leads found"
         emptyDescription="Create your first lead to get started."
         searchPlaceholder="Search leads..."

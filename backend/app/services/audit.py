@@ -1,4 +1,5 @@
 """Audit trail service — logs field-level changes for CRM entities."""
+from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.crm import AuditLog
 
@@ -33,6 +34,8 @@ def _serialize(val):
         return None
     if hasattr(val, "isoformat"):
         return val.isoformat()
+    if isinstance(val, Decimal):
+        return float(val)
     return val
 
 

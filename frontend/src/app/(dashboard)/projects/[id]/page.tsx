@@ -179,6 +179,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [tasks, setTasks] = useState<Task[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
 
+  // Team members for assignee dropdown
+  const [teamMembers, setTeamMembers] = useState<{ id: number; name: string; email?: string }[]>([])
+
   // Task creation
   const [showAddTask, setShowAddTask] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
@@ -210,7 +213,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     } catch { /* silent */ }
   }, [projectId])
 
-  useEffect(() => { fetchProject(); fetchTasks(); fetchMilestones() }, [fetchProject, fetchTasks, fetchMilestones])
+  useEffect(() => {
+    fetchProject(); fetchTasks(); fetchMilestones()
+    api.get('/settings/team-members', { params: { per_page: 100 } })
+      .then(({ data }) => setTeamMembers(normalizePaginated<{ id: number; name: string; email?: string }>(data).items))
+      .catch(() => {})
+  }, [fetchProject, fetchTasks, fetchMilestones])
 
   const tasksByStatus = useMemo(() =>
     STATUS_COLUMNS.reduce((acc, col) => {
@@ -235,7 +243,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     try {
       await api.post(`/projects/${projectId}/tasks`, {
         title: newTaskTitle, priority: newTaskPriority, status: 'todo',
-        assigned_to: newTaskAssignee ? parseInt(newTaskAssignee) : null,
+        assigned_to: newTaskAssignee && newTaskAssignee !== '__none__' ? parseInt(newTaskAssignee) : null,
         due_date: newTaskDue || null,
         estimated_hours: newTaskEstHours ? parseFloat(newTaskEstHours) : null,
         description: newTaskDesc || null,
@@ -591,8 +599,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-[13px]">Assignee (User ID)</Label>
-                <Input type="number" value={newTaskAssignee} onChange={(e) => setNewTaskAssignee(e.target.value)} placeholder="User ID" className="mt-1" />
+                <Label className="text-[13px]">Assignee</Label>
+                <Select value={newTaskAssignee} onValueChange={setNewTaskAssignee}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select assignee" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Unassigned</SelectItem>
+                    {teamMembers.map((m) => (
+                      <SelectItem key={m.id} value={String(m.id)}>
+                        {m.name} {m.email ? `(${m.email})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label className="text-[13px]">Est. Hours</Label>

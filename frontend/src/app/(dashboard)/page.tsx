@@ -68,7 +68,7 @@ async function fetchRecentLeads(): Promise<Lead[]> {
 }
 
 async function fetchRecentOrders(): Promise<SalesOrder[]> {
-  const res = await api.get('/sales/orders', { params: { per_page: 5, sort: '-created_at' } });
+  const res = await api.get('/sales/sales-orders', { params: { per_page: 5, sort: '-created_at' } });
   return res.data.data ?? res.data;
 }
 
