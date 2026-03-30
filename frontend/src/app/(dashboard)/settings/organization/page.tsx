@@ -161,7 +161,13 @@ export default function OrganizationSettingsPage() {
 
   useEffect(() => {
     api.get('/settings/organization')
-      .then(({ data }) => setSettings({ ...INITIAL, ...data }))
+      .then(({ data }) => {
+        // Replace null values with empty strings to avoid React controlled input warnings
+        const clean = Object.fromEntries(
+          Object.entries(data).map(([k, v]) => [k, v === null ? '' : v])
+        );
+        setSettings({ ...INITIAL, ...clean });
+      })
       .catch(() => toast.error('Failed to load settings'))
       .finally(() => setLoading(false));
   }, []);

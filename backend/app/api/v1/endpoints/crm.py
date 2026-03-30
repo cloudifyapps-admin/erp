@@ -155,6 +155,10 @@ async def create_lead(
 ):
     data = await request.json()
     data["code"] = await commit_number(db, tenant_id, "lead")
+    # Auto-generate title from first/last name if not provided
+    if not data.get("title"):
+        parts = [data.get("first_name", ""), data.get("last_name", "")]
+        data["title"] = " ".join(p for p in parts if p).strip() or "Untitled Lead"
     lead = await lead_service.create(db, data, tenant_id=tenant_id, user_id=current_user.id)
     # Auto-score the new lead
     await score_and_update_lead(db, lead, tenant_id)
