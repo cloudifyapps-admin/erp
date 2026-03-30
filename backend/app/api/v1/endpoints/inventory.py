@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, get_current_tenant_id
+from app.core.deps import get_current_user, get_current_tenant_id, require_permission
 from app.services.crud import CRUDService
 from app.services.numbering import commit_number, peek_number
 from app.models.global_models import User
@@ -62,6 +62,7 @@ async def list_products(
     type: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("products", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {}
@@ -82,6 +83,7 @@ async def get_product(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("products", "view")),
 ):
     obj = await product_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -95,6 +97,7 @@ async def create_product(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("products", "create")),
 ):
     if not data.get("sku"):
         data["sku"] = await commit_number(db, tenant_id, "product")
@@ -111,6 +114,7 @@ async def update_product(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("products", "edit")),
 ):
     obj = await product_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -125,6 +129,7 @@ async def delete_product(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("products", "delete")),
 ):
     deleted = await product_service.delete(db, id, tenant_id)
     if not deleted:
@@ -146,6 +151,7 @@ async def list_warehouses(
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("warehouses", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     items, total = await warehouse_service.get_list(
@@ -160,6 +166,7 @@ async def get_warehouse(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("warehouses", "view")),
 ):
     obj = await warehouse_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -173,6 +180,7 @@ async def create_warehouse(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("warehouses", "create")),
 ):
     if not data.get("code"):
         data["code"] = await commit_number(db, tenant_id, "warehouse")
@@ -189,6 +197,7 @@ async def update_warehouse(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("warehouses", "edit")),
 ):
     obj = await warehouse_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -203,6 +212,7 @@ async def delete_warehouse(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("warehouses", "delete")),
 ):
     deleted = await warehouse_service.delete(db, id, tenant_id)
     if not deleted:
@@ -225,6 +235,7 @@ async def list_stock_levels(
     warehouse_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-movements", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {}
@@ -255,6 +266,7 @@ async def list_stock_movements(
     type: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-movements", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {}
@@ -286,6 +298,7 @@ async def list_stock_adjustments(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-adjustments", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters = {"status": status} if status else None
@@ -302,6 +315,7 @@ async def get_stock_adjustment(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-adjustments", "view")),
 ):
     obj = await adj_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -321,6 +335,7 @@ async def create_stock_adjustment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-adjustments", "create")),
 ):
     line_items = data.pop("items", [])
     data["reference_number"] = await commit_number(db, tenant_id, "stock_adjustment")
@@ -346,6 +361,7 @@ async def update_stock_adjustment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-adjustments", "edit")),
 ):
     existing = await adj_service.get_by_id(db, id, tenant_id)
     if not existing:
@@ -379,6 +395,7 @@ async def delete_stock_adjustment(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-adjustments", "delete")),
 ):
     deleted = await adj_service.delete(db, id, tenant_id)
     if not deleted:
@@ -392,6 +409,7 @@ async def approve_stock_adjustment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-adjustments", "edit")),
 ):
     obj = await adj_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -422,6 +440,7 @@ async def list_stock_transfers(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-transfers", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters = {"status": status} if status else None
@@ -438,6 +457,7 @@ async def get_stock_transfer(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-transfers", "view")),
 ):
     obj = await transfer_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -457,6 +477,7 @@ async def create_stock_transfer(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-transfers", "create")),
 ):
     line_items = data.pop("items", [])
     data["reference_number"] = await commit_number(db, tenant_id, "stock_transfer")
@@ -482,6 +503,7 @@ async def update_stock_transfer(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-transfers", "edit")),
 ):
     existing = await transfer_service.get_by_id(db, id, tenant_id)
     if not existing:
@@ -515,6 +537,7 @@ async def delete_stock_transfer(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("stock-transfers", "delete")),
 ):
     deleted = await transfer_service.delete(db, id, tenant_id)
     if not deleted:

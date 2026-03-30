@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, get_current_tenant_id
+from app.core.deps import get_current_user, get_current_tenant_id, require_permission
 from app.services.crud import CRUDService
 from app.services.numbering import commit_number, peek_number
 from app.models.global_models import User
@@ -148,7 +148,7 @@ async def _enrich_departments(db: AsyncSession, rows: list[dict]):
     head_map: dict[int, str] = {}
     if head_ids:
         result = await db.execute(
-            select(User.id, (User.first_name + " " + User.last_name)).where(User.id.in_(head_ids))
+            select(User.id, User.name).where(User.id.in_(head_ids))
         )
         head_map = dict(result.all())
 
@@ -185,6 +185,7 @@ async def list_employees(
     department_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("employees", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {}
@@ -208,6 +209,7 @@ async def get_employee(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("employees", "view")),
 ):
     obj = await employee_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -223,6 +225,7 @@ async def create_employee(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("employees", "create")),
 ):
     if not data.get("employee_id"):
         data["employee_id"] = await commit_number(db, tenant_id, "employee")
@@ -239,6 +242,7 @@ async def update_employee(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("employees", "edit")),
 ):
     obj = await employee_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -253,6 +257,7 @@ async def delete_employee(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("employees", "delete")),
 ):
     deleted = await employee_service.delete(db, id, tenant_id)
     if not deleted:
@@ -274,6 +279,7 @@ async def list_departments(
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("departments", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     items, total = await dept_service.get_list(
@@ -290,6 +296,7 @@ async def get_department(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("departments", "view")),
 ):
     obj = await dept_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -305,6 +312,7 @@ async def create_department(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("departments", "create")),
 ):
     if not data.get("code"):
         data["code"] = await commit_number(db, tenant_id, "department")
@@ -321,6 +329,7 @@ async def update_department(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("departments", "edit")),
 ):
     obj = await dept_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -335,6 +344,7 @@ async def delete_department(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("departments", "delete")),
 ):
     deleted = await dept_service.delete(db, id, tenant_id)
     if not deleted:
@@ -358,6 +368,7 @@ async def list_attendance(
     employee_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("attendance", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {}
@@ -379,6 +390,7 @@ async def get_attendance(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("attendance", "view")),
 ):
     obj = await attendance_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -392,6 +404,7 @@ async def create_attendance(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("attendance", "create")),
 ):
     _parse_time_fields(data, ["check_in", "check_out"])
     obj = await attendance_service.create(db, data, tenant_id, user.id)
@@ -407,6 +420,7 @@ async def update_attendance(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("attendance", "edit")),
 ):
     _parse_time_fields(data, ["check_in", "check_out"])
     obj = await attendance_service.update(db, id, data, tenant_id, user.id)
@@ -422,6 +436,7 @@ async def delete_attendance(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("attendance", "delete")),
 ):
     deleted = await attendance_service.delete(db, id, tenant_id)
     if not deleted:
@@ -445,6 +460,7 @@ async def list_leave_requests(
     employee_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("leave-requests", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {}
@@ -467,6 +483,7 @@ async def get_leave_request(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("leave-requests", "view")),
 ):
     obj = await leave_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -480,6 +497,7 @@ async def create_leave_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("leave-requests", "create")),
 ):
     data["number"] = await commit_number(db, tenant_id, "leave_request")
     # Auto-compute days from start_date and end_date
@@ -501,6 +519,7 @@ async def update_leave_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("leave-requests", "edit")),
 ):
     existing = await leave_service.get_by_id(db, id, tenant_id)
     if not existing:
@@ -518,6 +537,7 @@ async def delete_leave_request(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("leave-requests", "delete")),
 ):
     deleted = await leave_service.delete(db, id, tenant_id)
     if not deleted:
@@ -531,6 +551,7 @@ async def approve_leave_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("leave-requests", "edit")),
 ):
     obj = await leave_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -553,6 +574,7 @@ async def reject_leave_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("leave-requests", "edit")),
 ):
     obj = await leave_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -584,6 +606,7 @@ async def list_holiday_lists(
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("holiday-lists", "view")),
 ):
     # Return individual holidays (flattened) for the UI list view
     skip, limit = _paginate(page, per_page)
@@ -613,6 +636,7 @@ async def get_holiday_list(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("holiday-lists", "view")),
 ):
     obj = await holiday_list_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -632,6 +656,7 @@ async def create_holiday_list(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("holiday-lists", "create")),
 ):
     holidays = data.pop("holidays", [])
     obj = await holiday_list_service.create(db, data, tenant_id, user.id)
@@ -659,6 +684,7 @@ async def update_holiday_list(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("holiday-lists", "edit")),
 ):
     holidays = data.pop("holidays", None)
     obj = await holiday_list_service.update(db, id, data, tenant_id, user.id)
@@ -690,6 +716,7 @@ async def delete_holiday_list(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("holiday-lists", "delete")),
 ):
     deleted = await holiday_list_service.delete(db, id, tenant_id)
     if not deleted:
@@ -713,6 +740,7 @@ async def list_payroll_runs(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("payroll-runs", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters = {"status": status} if status else None
@@ -729,6 +757,7 @@ async def get_payroll_run(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("payroll-runs", "view")),
 ):
     obj = await payroll_run_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -748,6 +777,7 @@ async def create_payroll_run(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("payroll-runs", "create")),
 ):
     data["number"] = await commit_number(db, tenant_id, "payroll_run")
     obj = await payroll_run_service.create(db, data, tenant_id, user.id)
@@ -763,6 +793,7 @@ async def update_payroll_run(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("payroll-runs", "edit")),
 ):
     existing = await payroll_run_service.get_by_id(db, id, tenant_id)
     if not existing:
@@ -780,6 +811,7 @@ async def delete_payroll_run(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("payroll-runs", "delete")),
 ):
     deleted = await payroll_run_service.delete(db, id, tenant_id)
     if not deleted:
@@ -794,6 +826,7 @@ async def generate_payroll_slips(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("payroll-runs", "edit")),
 ):
     """
     Generate payroll slips for the given payroll run.
@@ -870,6 +903,7 @@ async def list_performance_reviews(
     employee_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("performance-reviews", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {}
@@ -892,6 +926,7 @@ async def get_performance_review(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("performance-reviews", "view")),
 ):
     obj = await review_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -905,6 +940,7 @@ async def create_performance_review(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("performance-reviews", "create")),
 ):
     data["number"] = await commit_number(db, tenant_id, "performance_review")
     obj = await review_service.create(db, data, tenant_id, user.id)
@@ -920,6 +956,7 @@ async def update_performance_review(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("performance-reviews", "edit")),
 ):
     obj = await review_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -934,6 +971,7 @@ async def delete_performance_review(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("performance-reviews", "delete")),
 ):
     deleted = await review_service.delete(db, id, tenant_id)
     if not deleted:
@@ -957,6 +995,7 @@ async def list_expense_claims(
     employee_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("expense-claims", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {}
@@ -979,6 +1018,7 @@ async def get_expense_claim(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("expense-claims", "view")),
 ):
     obj = await expense_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -998,6 +1038,7 @@ async def create_expense_claim(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("expense-claims", "create")),
 ):
     line_items = data.pop("items", [])
     data["claim_number"] = await commit_number(db, tenant_id, "expense_claim")
@@ -1023,6 +1064,7 @@ async def update_expense_claim(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("expense-claims", "edit")),
 ):
     existing = await expense_service.get_by_id(db, id, tenant_id)
     if not existing:
@@ -1054,6 +1096,7 @@ async def delete_expense_claim(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("expense-claims", "delete")),
 ):
     deleted = await expense_service.delete(db, id, tenant_id)
     if not deleted:
@@ -1067,6 +1110,7 @@ async def approve_expense_claim(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("expense-claims", "edit")),
 ):
     obj = await expense_service.get_by_id(db, id, tenant_id)
     if not obj:

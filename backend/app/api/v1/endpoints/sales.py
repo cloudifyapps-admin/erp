@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
-from app.core.deps import get_current_user, get_current_tenant_id
+from app.core.deps import get_current_user, get_current_tenant_id, require_permission
 from app.services.crud import CRUDService
 from app.services.numbering import commit_number, peek_number
 from app.models.sales import (
@@ -73,6 +73,7 @@ async def list_quotations(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("quotations", "view")),
 ):
     skip = (page - 1) * per_page
     filters = {"status": status} if status else None
@@ -100,6 +101,7 @@ async def create_quotation(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("quotations", "create")),
 ):
     items_data: list = payload.pop("items", [])
 
@@ -132,6 +134,7 @@ async def get_quotation(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("quotations", "view")),
 ):
     quotation = await quotation_svc.get_by_id(db, quotation_id, tenant_id)
     if not quotation:
@@ -146,6 +149,7 @@ async def update_quotation(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("quotations", "edit")),
 ):
     items_data: list = payload.pop("items", None)
 
@@ -178,6 +182,7 @@ async def delete_quotation(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("quotations", "delete")),
 ):
     deleted = await quotation_svc.delete(db, quotation_id, tenant_id)
     if not deleted:
@@ -191,6 +196,7 @@ async def duplicate_quotation(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("quotations", "create")),
 ):
     original = await quotation_svc.get_by_id(db, quotation_id, tenant_id)
     if not original:
@@ -238,6 +244,7 @@ async def list_sales_orders(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("sales-orders", "view")),
 ):
     skip = (page - 1) * per_page
     filters = {"status": status} if status else None
@@ -265,6 +272,7 @@ async def create_sales_order(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("sales-orders", "create")),
 ):
     items_data: list = payload.pop("items", [])
 
@@ -297,6 +305,7 @@ async def get_sales_order(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("sales-orders", "view")),
 ):
     sales_order = await sales_order_svc.get_by_id(db, order_id, tenant_id)
     if not sales_order:
@@ -311,6 +320,7 @@ async def update_sales_order(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("sales-orders", "edit")),
 ):
     items_data: list = payload.pop("items", None)
 
@@ -342,6 +352,7 @@ async def delete_sales_order(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("sales-orders", "delete")),
 ):
     deleted = await sales_order_svc.delete(db, order_id, tenant_id)
     if not deleted:
@@ -362,6 +373,7 @@ async def list_deliveries(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("deliveries", "view")),
 ):
     skip = (page - 1) * per_page
     filters = {"status": status} if status else None
@@ -389,6 +401,7 @@ async def create_delivery(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("deliveries", "create")),
 ):
     items_data: list = payload.pop("items", [])
 
@@ -420,6 +433,7 @@ async def get_delivery(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("deliveries", "view")),
 ):
     delivery = await delivery_svc.get_by_id(db, delivery_id, tenant_id)
     if not delivery:
@@ -434,6 +448,7 @@ async def update_delivery(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("deliveries", "edit")),
 ):
     items_data: list = payload.pop("items", None)
 
@@ -464,6 +479,7 @@ async def delete_delivery(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("deliveries", "delete")),
 ):
     deleted = await delivery_svc.delete(db, delivery_id, tenant_id)
     if not deleted:
@@ -485,6 +501,7 @@ async def list_invoices(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("invoices", "view")),
 ):
     skip = (page - 1) * per_page
     filters: dict = {}
@@ -517,6 +534,7 @@ async def create_invoice(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("invoices", "create")),
 ):
     items_data: list = payload.pop("items", [])
 
@@ -553,6 +571,7 @@ async def get_invoice(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("invoices", "view")),
 ):
     invoice = await invoice_svc.get_by_id(db, invoice_id, tenant_id)
     if not invoice:
@@ -567,6 +586,7 @@ async def update_invoice(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("invoices", "edit")),
 ):
     items_data: list = payload.pop("items", None)
 
@@ -598,6 +618,7 @@ async def delete_invoice(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("invoices", "delete")),
 ):
     deleted = await invoice_svc.delete(db, invoice_id, tenant_id)
     if not deleted:
@@ -611,6 +632,7 @@ async def duplicate_invoice(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
     current_user: User = Depends(get_current_user),
+    _: bool = Depends(require_permission("invoices", "create")),
 ):
     original = await invoice_svc.get_by_id(db, invoice_id, tenant_id)
     if not original:

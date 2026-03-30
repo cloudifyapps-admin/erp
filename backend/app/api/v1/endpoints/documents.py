@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, get_current_tenant_id
+from app.core.deps import get_current_user, get_current_tenant_id, require_permission
 from app.services.crud import CRUDService
 from app.models.global_models import User
 from app.models.documents import Document, Attachment
@@ -61,6 +61,7 @@ async def list_documents(
     documentable_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("documents", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {}
@@ -83,6 +84,7 @@ async def get_document(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("documents", "view")),
 ):
     obj = await document_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -102,6 +104,7 @@ async def create_document(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("documents", "create")),
 ):
     obj = await document_service.create(db, data, tenant_id, user.id)
     await db.commit()
@@ -116,6 +119,7 @@ async def update_document(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("documents", "edit")),
 ):
     obj = await document_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -130,6 +134,7 @@ async def delete_document(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("documents", "delete")),
 ):
     # Also remove attachment files from disk
     result = await db.execute(
@@ -164,6 +169,7 @@ async def upload_attachment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("documents", "create")),
 ):
     """Upload a file attachment to a document."""
     document = await document_service.get_by_id(db, id, tenant_id)
@@ -203,6 +209,7 @@ async def download_attachment(
     attachment_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("documents", "view")),
 ):
     """Stream-download a specific attachment."""
     document = await document_service.get_by_id(db, id, tenant_id)
@@ -235,6 +242,7 @@ async def delete_attachment(
     attachment_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("documents", "delete")),
 ):
     """Delete an attachment record and remove its file from disk."""
     document = await document_service.get_by_id(db, id, tenant_id)

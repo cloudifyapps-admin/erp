@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, get_current_tenant_id
+from app.core.deps import get_current_user, get_current_tenant_id, require_permission
 from app.services.crud import CRUDService
 from app.services.numbering import commit_number, peek_number
 from app.models.global_models import User
@@ -61,6 +61,7 @@ async def list_vendors(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("vendors", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters = {"status": status} if status else None
@@ -77,6 +78,7 @@ async def get_vendor(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("vendors", "view")),
 ):
     obj = await vendor_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -90,6 +92,7 @@ async def create_vendor(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("vendors", "create")),
 ):
     if not data.get("code"):
         data["code"] = await commit_number(db, tenant_id, "vendor")
@@ -106,6 +109,7 @@ async def update_vendor(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("vendors", "edit")),
 ):
     obj = await vendor_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -120,6 +124,7 @@ async def delete_vendor(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("vendors", "delete")),
 ):
     deleted = await vendor_service.delete(db, id, tenant_id)
     if not deleted:
@@ -142,6 +147,7 @@ async def list_purchase_requests(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-requests", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters = {"status": status} if status else None
@@ -158,6 +164,7 @@ async def get_purchase_request(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-requests", "view")),
 ):
     obj = await pr_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -171,6 +178,7 @@ async def create_purchase_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-requests", "create")),
 ):
     data["number"] = await commit_number(db, tenant_id, "purchase_request")
     data.setdefault("requested_by", user.id)
@@ -187,6 +195,7 @@ async def update_purchase_request(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-requests", "edit")),
 ):
     obj = await pr_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -201,6 +210,7 @@ async def delete_purchase_request(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-requests", "delete")),
 ):
     deleted = await pr_service.delete(db, id, tenant_id)
     if not deleted:
@@ -224,6 +234,7 @@ async def list_purchase_orders(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-orders", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters = {"status": status} if status else None
@@ -240,6 +251,7 @@ async def get_purchase_order(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-orders", "view")),
 ):
     obj = await po_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -260,6 +272,7 @@ async def create_purchase_order(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-orders", "create")),
 ):
     line_items = data.pop("items", [])
     data["number"] = await commit_number(db, tenant_id, "purchase_order")
@@ -288,6 +301,7 @@ async def update_purchase_order(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-orders", "edit")),
 ):
     line_items = data.pop("items", None)
     obj = await po_service.update(db, id, data, tenant_id, user.id)
@@ -318,6 +332,7 @@ async def delete_purchase_order(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("purchase-orders", "delete")),
 ):
     deleted = await po_service.delete(db, id, tenant_id)
     if not deleted:
@@ -340,6 +355,7 @@ async def list_goods_receipts(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("goods-receipts", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters = {"status": status} if status else None
@@ -356,6 +372,7 @@ async def get_goods_receipt(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("goods-receipts", "view")),
 ):
     obj = await gr_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -375,6 +392,7 @@ async def create_goods_receipt(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("goods-receipts", "create")),
 ):
     line_items = data.pop("items", [])
     data["number"] = await commit_number(db, tenant_id, "goods_receipt")
@@ -400,6 +418,7 @@ async def update_goods_receipt(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("goods-receipts", "edit")),
 ):
     line_items = data.pop("items", None)
     obj = await gr_service.update(db, id, data, tenant_id, user.id)
@@ -428,6 +447,7 @@ async def delete_goods_receipt(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("goods-receipts", "delete")),
 ):
     deleted = await gr_service.delete(db, id, tenant_id)
     if not deleted:

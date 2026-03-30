@@ -7,7 +7,7 @@ from sqlalchemy import select, and_, func
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, get_current_tenant_id
+from app.core.deps import get_current_user, get_current_tenant_id, require_permission
 from app.services.crud import CRUDService
 from app.services.numbering import commit_number, peek_number
 from app.services.project_service import (
@@ -75,6 +75,7 @@ async def list_projects(
     manager_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters = {}
@@ -103,6 +104,7 @@ async def my_tasks(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "view")),
 ):
     """All tasks assigned to the current user across projects."""
     skip, limit = _paginate(page, per_page)
@@ -137,6 +139,7 @@ async def list_templates(
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     items, total = await template_service.get_list(
@@ -158,6 +161,7 @@ async def get_template(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     obj = await template_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -175,6 +179,7 @@ async def create_template(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "create")),
 ):
     obj = await template_service.create(db, data, tenant_id, user.id)
     await db.commit()
@@ -189,6 +194,7 @@ async def create_template_from_project(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "create")),
 ):
     proj = await project_service.get_by_id(db, project_id, tenant_id)
     if not proj:
@@ -232,6 +238,7 @@ async def create_project_from_template(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "create")),
 ):
     tpl = await template_service.get_by_id(db, template_id, tenant_id)
     if not tpl:
@@ -303,6 +310,7 @@ async def update_template(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     obj = await template_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -317,6 +325,7 @@ async def delete_template(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "delete")),
 ):
     deleted = await template_service.delete(db, id, tenant_id)
     if not deleted:
@@ -330,6 +339,7 @@ async def resource_utilization(
     end_date: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     """Cross-project resource utilization."""
     q = select(ResourceAllocation).where(ResourceAllocation.tenant_id == tenant_id)
@@ -362,6 +372,7 @@ async def list_user_skills(
     user_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     items, total = await skill_service.get_list(
         db, tenant_id, skip=0, limit=200,
@@ -376,6 +387,7 @@ async def add_skill(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "create")),
 ):
     obj = await skill_service.create(db, data, tenant_id, user.id)
     await db.commit()
@@ -388,6 +400,7 @@ async def delete_skill(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "delete")),
 ):
     deleted = await skill_service.delete(db, id, tenant_id)
     if not deleted:
@@ -400,6 +413,7 @@ async def get_project(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     obj = await project_service.get_by_id(db, id, tenant_id)
     if not obj:
@@ -423,6 +437,7 @@ async def create_project(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "create")),
 ):
     if not data.get("code"):
         data["code"] = await commit_number(db, tenant_id, "project")
@@ -439,6 +454,7 @@ async def update_project(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     obj = await project_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -453,6 +469,7 @@ async def delete_project(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "delete")),
 ):
     deleted = await project_service.delete(db, id, tenant_id)
     if not deleted:
@@ -480,6 +497,7 @@ async def list_tasks(
     phase_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {"project_id": project_id}
@@ -507,6 +525,7 @@ async def get_task(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "view")),
 ):
     result = await db.execute(
         select(Task).where(
@@ -557,6 +576,7 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "create")),
 ):
     proj = await project_service.get_by_id(db, project_id, tenant_id)
     if not proj:
@@ -576,6 +596,7 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     result = await db.execute(
         select(Task).where(
@@ -607,6 +628,7 @@ async def delete_task(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "delete")),
 ):
     result = await db.execute(
         select(Task).where(
@@ -628,6 +650,7 @@ async def update_task_status(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     result = await db.execute(
         select(Task).where(
@@ -660,6 +683,7 @@ async def reorder_tasks(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     order_list: List[dict] = data.get("order", [])
     if not order_list:
@@ -692,6 +716,7 @@ async def gantt_data(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     proj = await project_service.get_by_id(db, project_id, tenant_id)
     if not proj:
@@ -704,6 +729,7 @@ async def gen_wbs(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     proj = await project_service.get_by_id(db, project_id, tenant_id)
     if not proj:
@@ -718,6 +744,7 @@ async def recalc_progress(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     proj = await project_service.get_by_id(db, project_id, tenant_id)
     if not proj:
@@ -742,6 +769,7 @@ async def list_dependencies(
     task_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "view")),
 ):
     # Predecessors
     pred_result = await db.execute(
@@ -768,6 +796,7 @@ async def add_dependency(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     depends_on = data.get("depends_on_task_id")
     if not depends_on:
@@ -788,6 +817,7 @@ async def remove_dependency(
     dep_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     result = await db.execute(
         select(TaskDependency).where(
@@ -814,6 +844,7 @@ async def list_checklists(
     task_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "view")),
 ):
     items, total = await checklist_service.get_list(
         db, tenant_id, skip=0, limit=200,
@@ -831,6 +862,7 @@ async def add_checklist_item(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     data["task_id"] = task_id
     obj = await checklist_service.create(db, data, tenant_id, user.id)
@@ -848,6 +880,7 @@ async def toggle_checklist_item(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     result = await db.execute(
         select(TaskChecklist).where(
@@ -880,6 +913,7 @@ async def delete_checklist_item(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     result = await db.execute(
         select(TaskChecklist).where(
@@ -901,6 +935,7 @@ async def reorder_checklist(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     for entry in data.get("order", []):
         item_id = entry.get("id")
@@ -931,6 +966,7 @@ async def assign_label(
     data: dict,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     label_id = data.get("label_id")
     if not label_id:
@@ -949,6 +985,7 @@ async def remove_label(
     label_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     result = await db.execute(
         select(TaskLabelAssignment).where(
@@ -968,6 +1005,7 @@ async def list_task_labels(
     task_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "view")),
 ):
     result = await db.execute(
         select(TaskLabelAssignment).where(TaskLabelAssignment.task_id == task_id)
@@ -990,6 +1028,7 @@ async def list_task_comments(
     per_page: int = Query(25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     items, total = await comment_service.get_list(
@@ -1008,6 +1047,7 @@ async def add_task_comment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     data["task_id"] = task_id
     obj = await comment_service.create(db, data, tenant_id, user.id)
@@ -1025,6 +1065,7 @@ async def update_task_comment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     result = await db.execute(
         select(TaskComment).where(
@@ -1052,6 +1093,7 @@ async def delete_task_comment(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "delete")),
 ):
     result = await db.execute(
         select(TaskComment).where(
@@ -1075,6 +1117,7 @@ async def list_task_attachments(
     task_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "view")),
 ):
     result = await db.execute(
         select(TaskAttachment).where(TaskAttachment.task_id == task_id)
@@ -1090,6 +1133,7 @@ async def add_task_attachment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     data["task_id"] = task_id
     data["uploaded_by"] = user.id
@@ -1107,6 +1151,7 @@ async def delete_task_attachment(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "delete")),
 ):
     result = await db.execute(
         select(TaskAttachment).where(TaskAttachment.id == id)
@@ -1128,6 +1173,7 @@ async def list_watchers(
     task_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "view")),
 ):
     result = await db.execute(
         select(TaskWatcher).where(TaskWatcher.task_id == task_id)
@@ -1143,6 +1189,7 @@ async def add_watcher(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     user_id = data.get("user_id", user.id)
     obj = TaskWatcher(task_id=task_id, user_id=user_id)
@@ -1159,6 +1206,7 @@ async def remove_watcher(
     user_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("tasks", "edit")),
 ):
     result = await db.execute(
         select(TaskWatcher).where(
@@ -1188,6 +1236,7 @@ async def list_milestones(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("milestones", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {"project_id": project_id}
@@ -1207,6 +1256,7 @@ async def get_milestone(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("milestones", "view")),
 ):
     result = await db.execute(
         select(Milestone).where(
@@ -1226,6 +1276,7 @@ async def create_milestone(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("milestones", "create")),
 ):
     proj = await project_service.get_by_id(db, project_id, tenant_id)
     if not proj:
@@ -1245,6 +1296,7 @@ async def update_milestone(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("milestones", "edit")),
 ):
     result = await db.execute(
         select(Milestone).where(
@@ -1270,6 +1322,7 @@ async def delete_milestone(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("milestones", "delete")),
 ):
     result = await db.execute(
         select(Milestone).where(
@@ -1301,6 +1354,7 @@ async def list_time_logs(
     is_billable: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("time-logs", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     filters: dict = {"project_id": project_id}
@@ -1324,6 +1378,7 @@ async def get_time_log(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("time-logs", "view")),
 ):
     result = await db.execute(
         select(TimeLog).where(
@@ -1343,6 +1398,7 @@ async def create_time_log(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("time-logs", "create")),
 ):
     proj = await project_service.get_by_id(db, project_id, tenant_id)
     if not proj:
@@ -1362,6 +1418,7 @@ async def start_timer(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("time-logs", "create")),
 ):
     proj = await project_service.get_by_id(db, project_id, tenant_id)
     if not proj:
@@ -1401,6 +1458,7 @@ async def stop_timer(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("time-logs", "edit")),
 ):
     result = await db.execute(
         select(TimeLog).where(
@@ -1437,6 +1495,7 @@ async def update_time_log(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("time-logs", "edit")),
 ):
     result = await db.execute(
         select(TimeLog).where(
@@ -1462,6 +1521,7 @@ async def delete_time_log(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("time-logs", "delete")),
 ):
     result = await db.execute(
         select(TimeLog).where(
@@ -1487,6 +1547,7 @@ async def list_members(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     items, total = await member_service.get_list(
         db, tenant_id, skip=0, limit=200,
@@ -1512,6 +1573,7 @@ async def add_member(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     data["project_id"] = project_id
     # Look up user by email if provided
@@ -1544,6 +1606,7 @@ async def update_member(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     result = await db.execute(
         select(ProjectMember).where(
@@ -1569,6 +1632,7 @@ async def remove_member(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     result = await db.execute(
         select(ProjectMember).where(
@@ -1596,6 +1660,7 @@ async def project_activity(
     per_page: int = Query(25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     skip, limit = _paginate(page, per_page)
     items, total = await proj_comment_service.get_list(
@@ -1623,6 +1688,7 @@ async def add_project_comment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     data["project_id"] = project_id
     data.setdefault("comment_type", "comment")
@@ -1638,6 +1704,7 @@ async def delete_project_comment(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "delete")),
 ):
     result = await db.execute(
         select(ProjectComment).where(
@@ -1660,6 +1727,7 @@ async def list_project_attachments(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     result = await db.execute(
         select(ProjectAttachment).where(ProjectAttachment.project_id == project_id)
@@ -1674,6 +1742,7 @@ async def add_project_attachment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     data["project_id"] = project_id
     data["uploaded_by"] = user.id
@@ -1690,6 +1759,7 @@ async def delete_project_attachment(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "delete")),
 ):
     result = await db.execute(
         select(ProjectAttachment).where(ProjectAttachment.id == id)
@@ -1711,6 +1781,7 @@ async def list_phases(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     items, total = await phase_service.get_list(
         db, tenant_id, skip=0, limit=200,
@@ -1727,6 +1798,7 @@ async def create_phase(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     data["project_id"] = project_id
     obj = await phase_service.create(db, data, tenant_id, user.id)
@@ -1743,6 +1815,7 @@ async def update_phase(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     obj = await phase_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -1758,6 +1831,7 @@ async def delete_phase(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "delete")),
 ):
     deleted = await phase_service.delete(db, id, tenant_id)
     if not deleted:
@@ -1772,6 +1846,7 @@ async def reorder_phases(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     for entry in data.get("order", []):
         pid = entry.get("id")
@@ -1801,6 +1876,7 @@ async def list_allocations(
     project_id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "view")),
 ):
     items, total = await alloc_service.get_list(
         db, tenant_id, skip=0, limit=200,
@@ -1824,6 +1900,7 @@ async def create_allocation(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     data["project_id"] = project_id
     obj = await alloc_service.create(db, data, tenant_id, user.id)
@@ -1840,6 +1917,7 @@ async def update_allocation(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "edit")),
 ):
     obj = await alloc_service.update(db, id, data, tenant_id, user.id)
     if not obj:
@@ -1855,6 +1933,7 @@ async def delete_allocation(
     id: int,
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
+    _: bool = Depends(require_permission("projects", "delete")),
 ):
     deleted = await alloc_service.delete(db, id, tenant_id)
     if not deleted:
