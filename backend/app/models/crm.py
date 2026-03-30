@@ -13,6 +13,7 @@ class Lead(TenantMixin, Base):
     __tablename__ = "leads"
 
     id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), nullable=True, index=True)
     title = Column(String(255), nullable=False)
     salutation_id = Column(Integer, ForeignKey("salutations.id"), nullable=True)
     first_name = Column(String(100), nullable=False)
@@ -58,6 +59,7 @@ class Lead(TenantMixin, Base):
     converted_at = Column(DateTime, nullable=True)
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_lead_code"),
         Index("ix_leads_tenant_status", "tenant_id", "status"),
         Index("ix_leads_tenant_assigned", "tenant_id", "assigned_to"),
         Index("ix_leads_tenant_score", "tenant_id", "lead_score"),
@@ -69,6 +71,7 @@ class Contact(TenantMixin, Base):
     __tablename__ = "contacts"
 
     id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), nullable=True, index=True)
     salutation_id = Column(Integer, ForeignKey("salutations.id"), nullable=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
@@ -93,6 +96,7 @@ class Contact(TenantMixin, Base):
     custom_fields = Column(JSONB, server_default='{}')
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "code", name="uq_contact_code"),
         Index("ix_contacts_tenant_email", "tenant_id", "email"),
     )
 

@@ -406,6 +406,7 @@ class ProjectRisk(TenantMixin, Base):
     __tablename__ = "project_risks"
 
     id = Column(Integer, primary_key=True, index=True)
+    number = Column(String(50), nullable=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
@@ -421,6 +422,10 @@ class ProjectRisk(TenantMixin, Base):
     resolved_at = Column(DateTime, nullable=True)
     custom_fields = Column(JSONB, server_default='{}')
 
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "number", name="uq_project_risk_number"),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Phase 4: Project Issues
@@ -430,6 +435,7 @@ class ProjectIssue(TenantMixin, Base):
     __tablename__ = "project_issues"
 
     id = Column(Integer, primary_key=True, index=True)
+    number = Column(String(50), nullable=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
@@ -443,6 +449,10 @@ class ProjectIssue(TenantMixin, Base):
     resolution = Column(Text, nullable=True)
     due_date = Column(Date, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "number", name="uq_project_issue_number"),
+    )
 
 
 # ---------------------------------------------------------------------------

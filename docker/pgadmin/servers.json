@@ -1,0 +1,24 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "ERP Database",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "erp_db",
+      "Username": "erp_user",
+      "SSLMode": "prefer",
+      "PassFile": "/var/lib/pgadmin/pgpass"
+    },
+    "2": {
+      "Name": "Keycloak Database",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "keycloak_db",
+      "Username": "erp_user",
+      "SSLMode": "prefer",
+      "PassFile": "/var/lib/pgadmin/pgpass"
+    }
+  }
+}

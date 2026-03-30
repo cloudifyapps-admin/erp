@@ -99,7 +99,16 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <Button type="submit" className="mt-1 w-full" disabled={isPending}>
+          <div className="flex justify-end">
+            <Link
+              href="/forgot-password"
+              className="text-sm text-muted-foreground underline-offset-4 hover:underline hover:text-foreground"
+            >
+              Forgot password?
+            </Link>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={isPending}>
             {isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
             {isPending ? 'Signing in…' : 'Sign in'}
           </Button>

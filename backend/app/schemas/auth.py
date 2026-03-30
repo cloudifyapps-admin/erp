@@ -39,6 +39,15 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
 class MeResponse(BaseModel):
     user: UserResponse
     tenant: Optional[dict] = None

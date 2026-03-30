@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
-from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_token, create_invitation_token
+from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_token, create_invitation_token, create_password_reset_token
 from app.core.deps import get_current_user, get_user_permissions
 from app.models.global_models import User, Tenant, TenantUser, TeamInvitation
 from app.models.tenant_models import OrganizationSettings, Role, UserRole, Permission, RolePermission
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, RefreshRequest, SwitchTenantRequest, MeResponse, UserResponse
+from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, RefreshRequest, SwitchTenantRequest, MeResponse, UserResponse, ForgotPasswordRequest, ResetPasswordRequest
 from app.services.numbering import DEFAULT_SERIES
 
 
@@ -323,6 +323,53 @@ async def switch_tenant(
     user.current_tenant_id = data.tenant_id
     await db.commit()
     return {"message": "Tenant switched", "tenant_id": data.tenant_id}
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Request a password reset email. Always returns success to prevent email enumeration."""
+    from app.core.config import settings as app_settings
+
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+
+    if user:
+        token = create_password_reset_token({"sub": str(user.id), "email": user.email})
+        reset_url = f"{app_settings.FRONTEND_URL}/reset-password?token={token}"
+
+        from app.worker import send_password_reset_email
+        send_password_reset_email.delay(
+            to_email=user.email,
+            user_name=user.name,
+            reset_url=reset_url,
+        )
+
+    return {"message": "If an account with that email exists, a password reset link has been sent."}
+
+
+@router.post("/reset-password")
+async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Reset password using a valid reset token."""
+    payload = decode_token(data.token)
+    if not payload or payload.get("type") != "password_reset":
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if len(data.password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
+
+    user.password_hash = get_password_hash(data.password)
+    await db.commit()
+
+    return {"message": "Password has been reset successfully. You can now sign in."}
 
 
 @router.get("/invitation-info")

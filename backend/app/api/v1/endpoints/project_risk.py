@@ -79,6 +79,7 @@ async def create_risk(
     tenant_id: int = Depends(get_current_tenant_id),
 ):
     data["project_id"] = project_id
+    data["number"] = await commit_number(db, tenant_id, "project_risk")
     p = PROBABILITY_MAP.get(data.get("probability", "medium"), 3)
     i = IMPACT_MAP.get(data.get("impact", "medium"), 3)
     data["risk_score"] = p * i
@@ -208,6 +209,7 @@ async def create_issue(
     tenant_id: int = Depends(get_current_tenant_id),
 ):
     data["project_id"] = project_id
+    data["number"] = await commit_number(db, tenant_id, "project_issue")
     data.setdefault("reported_by", user.id)
     obj = await issue_service.create(db, data, tenant_id, user.id)
     await db.commit()

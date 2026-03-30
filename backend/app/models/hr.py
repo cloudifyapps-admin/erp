@@ -82,6 +82,7 @@ class LeaveRequest(TenantMixin, Base):
     __tablename__ = "leave_requests"
 
     id = Column(Integer, primary_key=True, index=True)
+    number = Column(String(50), nullable=True, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     leave_type_id = Column(Integer, ForeignKey("leave_types.id"), nullable=True)
     type = Column(String(50), nullable=True)
@@ -95,6 +96,7 @@ class LeaveRequest(TenantMixin, Base):
     rejection_reason = Column(Text, nullable=True)
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "number", name="uq_leave_request_number"),
         Index("ix_leave_requests_tenant_emp_status", "tenant_id", "employee_id", "status"),
     )
 
@@ -134,6 +136,7 @@ class PayrollRun(TenantMixin, Base):
     __tablename__ = "payroll_runs"
 
     id = Column(Integer, primary_key=True, index=True)
+    number = Column(String(50), nullable=True, index=True)
     title = Column(String(255), nullable=False)
     year = Column(Integer, nullable=False)
     month = Column(Integer, nullable=False)
@@ -149,6 +152,7 @@ class PayrollRun(TenantMixin, Base):
     notes = Column(Text, nullable=True)
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "number", name="uq_payroll_run_number"),
         UniqueConstraint("tenant_id", "year", "month", name="uq_payroll_run_period"),
     )
 
@@ -182,6 +186,7 @@ class PerformanceReview(TenantMixin, Base):
     __tablename__ = "performance_reviews"
 
     id = Column(Integer, primary_key=True, index=True)
+    number = Column(String(50), nullable=True, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     review_period = Column(String(100), nullable=True)
@@ -195,6 +200,7 @@ class PerformanceReview(TenantMixin, Base):
     acknowledged_at = Column(DateTime, nullable=True)
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "number", name="uq_performance_review_number"),
         Index("ix_perf_reviews_tenant_emp_status", "tenant_id", "employee_id", "status"),
     )
 

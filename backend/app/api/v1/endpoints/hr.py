@@ -347,6 +347,7 @@ async def create_leave_request(
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
 ):
+    data["number"] = await commit_number(db, tenant_id, "leave_request")
     obj = await leave_service.create(db, data, tenant_id, user.id)
     await db.commit()
     await db.refresh(obj)
@@ -587,6 +588,7 @@ async def create_payroll_run(
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
 ):
+    data["number"] = await commit_number(db, tenant_id, "payroll_run")
     obj = await payroll_run_service.create(db, data, tenant_id, user.id)
     await db.commit()
     await db.refresh(obj)
@@ -741,6 +743,7 @@ async def create_performance_review(
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
 ):
+    data["number"] = await commit_number(db, tenant_id, "performance_review")
     obj = await review_service.create(db, data, tenant_id, user.id)
     await db.commit()
     await db.refresh(obj)

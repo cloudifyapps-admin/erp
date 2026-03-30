@@ -154,6 +154,7 @@ async def create_lead(
     _: bool = Depends(require_permission("leads", "edit")),
 ):
     data = await request.json()
+    data["code"] = await commit_number(db, tenant_id, "lead")
     lead = await lead_service.create(db, data, tenant_id=tenant_id, user_id=current_user.id)
     # Auto-score the new lead
     await score_and_update_lead(db, lead, tenant_id)
@@ -518,6 +519,7 @@ async def create_contact(
     _: bool = Depends(require_permission("contacts", "edit")),
 ):
     data = await request.json()
+    data["code"] = await commit_number(db, tenant_id, "contact")
     contact = await contact_service.create(db, data, tenant_id=tenant_id, user_id=current_user.id)
     await db.flush()
     await log_audit(db, tenant_id, current_user.id, "contact", contact.id, "create",

@@ -1,17 +1,37 @@
-version: "3.9"
+x-backend-env: &backend-env
+  DATABASE_URL: ${DATABASE_URL}
+  DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+  REDIS_URL: ${REDIS_URL}
+  MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+  MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+  MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+  SECRET_KEY: ${SECRET_KEY}
+  CORS_ORIGINS: '${CORS_ORIGINS}'
+  DEBUG: "${DEBUG}"
+  SMTP_HOST: ${SMTP_HOST}
+  SMTP_PORT: "${SMTP_PORT}"
+  SMTP_USER: "${SMTP_USER}"
+  SMTP_PASSWORD: "${SMTP_PASSWORD}"
+  SMTP_TLS: "${SMTP_TLS}"
+  EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS}
+  EMAIL_FROM_NAME: ${EMAIL_FROM_NAME}
+  FRONTEND_URL: ${FRONTEND_URL}
 
 services:
-  # ─── PostgreSQL ───────────────────────────────────────
+  # ─── PostgreSQL (single instance, two databases) ────
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: erp_db
-      POSTGRES_USER: erp_user
-      POSTGRES_PASSWORD: erp_password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U erp_user -d erp_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -37,8 +57,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
     healthcheck:
@@ -49,19 +69,21 @@ services:
     networks:
       - erp-internal
 
-  # ─── Keycloak (IAM) ──────────────────────────────────
+  # ─── Keycloak (IAM) — uses keycloak_db ──────────────
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     command: start-dev
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/erp_db
-      KC_DB_USERNAME: erp_user
-      KC_DB_PASSWORD: erp_password
+      KC_DB_URL: ${KC_DB_URL}
+      KC_DB_USERNAME: ${KC_DB_USERNAME}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    ports:
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,14 +94,23 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@cloudifyapps.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
       PGADMIN_CONFIG_SERVER_MODE: "False"
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
     ports:
       - "5050:80"
     volumes:
       - pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./docker/pgadmin/pgpass:/pgadmin4/pgpass:ro
+    entrypoint: >
+      /bin/sh -c "
+      cp /pgadmin4/pgpass /var/lib/pgadmin/pgpass &&
+      chmod 600 /var/lib/pgadmin/pgpass &&
+      /entrypoint.sh
+      "
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,23 +133,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql+asyncpg://erp_user:erp_password@postgres:5432/erp_db
-      DATABASE_URL_SYNC: postgresql://erp_user:erp_password@postgres:5432/erp_db
-      REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      SECRET_KEY: cloudifyapps-erp-secret-change-in-production-${RANDOM}
-      CORS_ORIGINS: '["http://localhost:3000","http://frontend:3000"]'
-      DEBUG: "true"
-      SMTP_HOST: mailhog
-      SMTP_PORT: "1025"
-      SMTP_USER: ""
-      SMTP_PASSWORD: ""
-      SMTP_TLS: "false"
-      EMAIL_FROM_ADDRESS: noreply@cloudifyapps.com
-      EMAIL_FROM_NAME: Cloudifyapps ERP
-      FRONTEND_URL: http://localhost:3000
+      <<: *backend-env
     ports:
       - "8000:8000"
     volumes:
@@ -141,8 +156,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000/api
-      NEXT_PUBLIC_APP_NAME: Cloudifyapps ERP
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME}
     ports:
       - "3000:3000"
     volumes:
@@ -162,17 +177,7 @@ services:
       dockerfile: Dockerfile
     command: celery -A app.worker worker --loglevel=info
     environment:
-      DATABASE_URL: postgresql+asyncpg://erp_user:erp_password@postgres:5432/erp_db
-      DATABASE_URL_SYNC: postgresql://erp_user:erp_password@postgres:5432/erp_db
-      REDIS_URL: redis://redis:6379/0
-      SMTP_HOST: mailhog
-      SMTP_PORT: "1025"
-      SMTP_USER: ""
-      SMTP_PASSWORD: ""
-      SMTP_TLS: "false"
-      EMAIL_FROM_ADDRESS: noreply@cloudifyapps.com
-      EMAIL_FROM_NAME: Cloudifyapps ERP
-      FRONTEND_URL: http://localhost:3000
+      <<: *backend-env
     volumes:
       - ./backend:/app
     depends_on:
@@ -189,17 +194,7 @@ services:
       dockerfile: Dockerfile
     command: celery -A app.worker beat --loglevel=info
     environment:
-      DATABASE_URL: postgresql+asyncpg://erp_user:erp_password@postgres:5432/erp_db
-      DATABASE_URL_SYNC: postgresql://erp_user:erp_password@postgres:5432/erp_db
-      REDIS_URL: redis://redis:6379/0
-      SMTP_HOST: mailhog
-      SMTP_PORT: "1025"
-      SMTP_USER: ""
-      SMTP_PASSWORD: ""
-      SMTP_TLS: "false"
-      EMAIL_FROM_ADDRESS: noreply@cloudifyapps.com
-      EMAIL_FROM_NAME: Cloudifyapps ERP
-      FRONTEND_URL: http://localhost:3000
+      <<: *backend-env
     volumes:
       - ./backend:/app
     depends_on:

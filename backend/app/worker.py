@@ -185,6 +185,22 @@ def check_project_budget_alerts():
     pass
 
 
+@app.task(name="app.tasks.send_password_reset_email")
+def send_password_reset_email(
+    to_email: str,
+    user_name: str,
+    reset_url: str,
+) -> bool:
+    """Send a password reset email via SMTP."""
+    from app.utils.email import send_email, build_password_reset_email
+
+    subject, html_body, text_body = build_password_reset_email(
+        reset_url=reset_url,
+        user_name=user_name,
+    )
+    return send_email(to_email, subject, html_body, text_body)
+
+
 @app.task(name="app.tasks.send_invitation_email")
 def send_invitation_email(
     to_email: str,

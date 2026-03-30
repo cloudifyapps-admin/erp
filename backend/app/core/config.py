@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # Invitation
     INVITATION_EXPIRE_HOURS: int = 72
 
+    # Password Reset
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 60
+
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://frontend:3000"]
 
