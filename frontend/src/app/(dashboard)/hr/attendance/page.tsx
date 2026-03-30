@@ -102,7 +102,7 @@ export default function AttendancePage() {
       header: 'Check In',
       cell: (row) =>
         row.check_in
-          ? new Date(row.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          ? row.check_in.substring(0, 5)
           : <span className="text-muted-foreground">—</span>,
     },
     {
@@ -110,7 +110,7 @@ export default function AttendancePage() {
       header: 'Check Out',
       cell: (row) =>
         row.check_out
-          ? new Date(row.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          ? row.check_out.substring(0, 5)
           : <span className="text-muted-foreground">—</span>,
     },
     {

@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import datetime, time as dt_time
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_tenant_id
@@ -13,6 +13,7 @@ from app.models.global_models import User
 from app.models.hr import (
     Employee,
     Department,
+    Designation,
     Attendance,
     LeaveRequest,
     HolidayList,
@@ -49,6 +50,125 @@ def _row_to_dict(obj) -> dict:
     return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
 
 
+def _parse_time_fields(data: dict, fields: list[str]):
+    """Convert time strings like '09:00:00' to datetime.time objects."""
+    for f in fields:
+        val = data.get(f)
+        if isinstance(val, str):
+            parts = val.split(":")
+            data[f] = dt_time(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
+
+
+def _parse_date_fields(data: dict, fields: list[str]):
+    """Convert date strings like '2026-01-01' to datetime.date objects."""
+    from datetime import date as dt_date
+    for f in fields:
+        val = data.get(f)
+        if isinstance(val, str):
+            data[f] = dt_date.fromisoformat(val)
+
+
+# ---------------------------------------------------------------------------
+# Helpers — Employee enrichment
+# ---------------------------------------------------------------------------
+
+async def _enrich_with_employee(db: AsyncSession, rows: list[dict]):
+    """Add employee_name, department_name to dicts that have employee_id (e.g. attendance, leave)."""
+    emp_ids = {r["employee_id"] for r in rows if r.get("employee_id") and isinstance(r["employee_id"], int)}
+    if not emp_ids:
+        return
+    result = await db.execute(
+        select(Employee.id, Employee.first_name, Employee.last_name, Employee.department_id)
+        .where(Employee.id.in_(emp_ids))
+    )
+    emp_map: dict[int, tuple] = {}
+    dept_ids: set[int] = set()
+    for eid, fn, ln, did in result.all():
+        emp_map[eid] = (f"{fn} {ln}".strip(), did)
+        if did:
+            dept_ids.add(did)
+
+    dept_map: dict[int, str] = {}
+    if dept_ids:
+        result = await db.execute(
+            select(Department.id, Department.name).where(Department.id.in_(dept_ids))
+        )
+        dept_map = dict(result.all())
+
+    for r in rows:
+        emp = emp_map.get(r.get("employee_id"))
+        if emp:
+            r["employee_name"] = emp[0]
+            r["department_name"] = dept_map.get(emp[1]) or None
+        else:
+            r["employee_name"] = None
+            r["department_name"] = None
+
+
+async def _enrich_employees(db: AsyncSession, rows: list[dict]):
+    """Add full_name, department_name, designation to employee dicts."""
+    dept_ids = {r["department_id"] for r in rows if r.get("department_id")}
+    desig_ids = {r["designation_id"] for r in rows if r.get("designation_id")}
+
+    dept_map: dict[int, str] = {}
+    if dept_ids:
+        result = await db.execute(
+            select(Department.id, Department.name).where(Department.id.in_(dept_ids))
+        )
+        dept_map = dict(result.all())
+
+    desig_map: dict[int, str] = {}
+    if desig_ids:
+        result = await db.execute(
+            select(Designation.id, Designation.title).where(Designation.id.in_(desig_ids))
+        )
+        desig_map = dict(result.all())
+
+    for r in rows:
+        r["full_name"] = f'{r.get("first_name", "")} {r.get("last_name", "")}'.strip()
+        r["department_name"] = dept_map.get(r.get("department_id")) or None
+        r["designation"] = desig_map.get(r.get("designation_id")) or None
+
+
+async def _enrich_departments(db: AsyncSession, rows: list[dict]):
+    """Add parent_name, head_name, employee_count, status to department dicts."""
+    dept_ids = [r["id"] for r in rows]
+    parent_ids = {r["parent_id"] for r in rows if r.get("parent_id")}
+    head_ids = {r["head_id"] for r in rows if r.get("head_id")}
+
+    # Parent names
+    parent_map: dict[int, str] = {}
+    if parent_ids:
+        result = await db.execute(
+            select(Department.id, Department.name).where(Department.id.in_(parent_ids))
+        )
+        parent_map = dict(result.all())
+
+    # Head names (from users table)
+    head_map: dict[int, str] = {}
+    if head_ids:
+        result = await db.execute(
+            select(User.id, (User.first_name + " " + User.last_name)).where(User.id.in_(head_ids))
+        )
+        head_map = dict(result.all())
+
+    # Employee count per department
+    emp_counts: dict[int, int] = {}
+    if dept_ids:
+        result = await db.execute(
+            select(Employee.department_id, func.count(Employee.id))
+            .where(Employee.department_id.in_(dept_ids))
+            .group_by(Employee.department_id)
+        )
+        emp_counts = dict(result.all())
+
+    for r in rows:
+        r["parent_name"] = parent_map.get(r.get("parent_id")) or None
+        r["head_name"] = head_map.get(r.get("head_id")) or None
+        r["employee_count"] = emp_counts.get(r["id"], 0)
+        r["status"] = "active" if r.get("is_active", True) else "inactive"
+
+
 # ---------------------------------------------------------------------------
 # Employees
 # ---------------------------------------------------------------------------
@@ -78,7 +198,9 @@ async def list_employees(
         search_fields=["first_name", "last_name", "employee_id", "email"],
         filters=filters or None,
     )
-    return _list_response([_row_to_dict(i) for i in items], total, page, per_page)
+    rows = [_row_to_dict(i) for i in items]
+    await _enrich_employees(db, rows)
+    return _list_response(rows, total, page, per_page)
 
 
 @router.get("/employees/{id}")
@@ -90,7 +212,9 @@ async def get_employee(
     obj = await employee_service.get_by_id(db, id, tenant_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Employee not found")
-    return _row_to_dict(obj)
+    row = _row_to_dict(obj)
+    await _enrich_employees(db, [row])
+    return row
 
 
 @router.post("/employees", status_code=201)
@@ -156,7 +280,9 @@ async def list_departments(
         db, tenant_id, skip=skip, limit=limit,
         search=search, search_fields=["name", "code"],
     )
-    return _list_response([_row_to_dict(i) for i in items], total, page, per_page)
+    rows = [_row_to_dict(i) for i in items]
+    await _enrich_departments(db, rows)
+    return _list_response(rows, total, page, per_page)
 
 
 @router.get("/departments/{id}")
@@ -168,7 +294,9 @@ async def get_department(
     obj = await dept_service.get_by_id(db, id, tenant_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Department not found")
-    return _row_to_dict(obj)
+    row = _row_to_dict(obj)
+    await _enrich_departments(db, [row])
+    return row
 
 
 @router.post("/departments", status_code=201)
@@ -241,7 +369,9 @@ async def list_attendance(
         db, tenant_id, skip=skip, limit=limit,
         filters=filters or None,
     )
-    return _list_response([_row_to_dict(i) for i in items], total, page, per_page)
+    rows = [_row_to_dict(i) for i in items]
+    await _enrich_with_employee(db, rows)
+    return _list_response(rows, total, page, per_page)
 
 
 @router.get("/attendance/{id}")
@@ -263,6 +393,7 @@ async def create_attendance(
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
 ):
+    _parse_time_fields(data, ["check_in", "check_out"])
     obj = await attendance_service.create(db, data, tenant_id, user.id)
     await db.commit()
     await db.refresh(obj)
@@ -277,6 +408,7 @@ async def update_attendance(
     user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant_id),
 ):
+    _parse_time_fields(data, ["check_in", "check_out"])
     obj = await attendance_service.update(db, id, data, tenant_id, user.id)
     if not obj:
         raise HTTPException(status_code=404, detail="Attendance record not found")
@@ -325,7 +457,9 @@ async def list_leave_requests(
         search=search, search_fields=["reason"],
         filters=filters or None,
     )
-    return _list_response([_row_to_dict(i) for i in items], total, page, per_page)
+    rows = [_row_to_dict(i) for i in items]
+    await _enrich_with_employee(db, rows)
+    return _list_response(rows, total, page, per_page)
 
 
 @router.get("/leave-requests/{id}")
@@ -348,6 +482,12 @@ async def create_leave_request(
     tenant_id: int = Depends(get_current_tenant_id),
 ):
     data["number"] = await commit_number(db, tenant_id, "leave_request")
+    # Auto-compute days from start_date and end_date
+    if not data.get("days") and data.get("start_date") and data.get("end_date"):
+        from datetime import date as dt_date
+        sd = dt_date.fromisoformat(data["start_date"]) if isinstance(data["start_date"], str) else data["start_date"]
+        ed = dt_date.fromisoformat(data["end_date"]) if isinstance(data["end_date"], str) else data["end_date"]
+        data["days"] = (ed - sd).days + 1
     obj = await leave_service.create(db, data, tenant_id, user.id)
     await db.commit()
     await db.refresh(obj)
@@ -445,12 +585,27 @@ async def list_holiday_lists(
     db: AsyncSession = Depends(get_db),
     tenant_id: int = Depends(get_current_tenant_id),
 ):
+    # Return individual holidays (flattened) for the UI list view
     skip, limit = _paginate(page, per_page)
-    items, total = await holiday_list_service.get_list(
-        db, tenant_id, skip=skip, limit=limit,
-        search=search, search_fields=["name"],
+    query = (
+        select(Holiday, HolidayList.name.label("list_name"))
+        .join(HolidayList, Holiday.holiday_list_id == HolidayList.id)
+        .where(Holiday.tenant_id == tenant_id)
     )
-    return _list_response([_row_to_dict(i) for i in items], total, page, per_page)
+    if search:
+        query = query.where(Holiday.name.ilike(f"%{search}%"))
+    count_q = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+    query = query.order_by(Holiday.holiday_date).offset(skip).limit(limit)
+    result = await db.execute(query)
+    rows = []
+    for holiday, list_name in result.all():
+        d = _row_to_dict(holiday)
+        d["date"] = d.pop("holiday_date", None)
+        d["type"] = d.get("holiday_type") or "national"
+        d["list_name"] = list_name
+        rows.append(d)
+    return _list_response(rows, total, page, per_page)
 
 
 @router.get("/holiday-lists/{id}")
@@ -481,6 +636,9 @@ async def create_holiday_list(
     holidays = data.pop("holidays", [])
     obj = await holiday_list_service.create(db, data, tenant_id, user.id)
     for h in holidays:
+        if "date" in h and "holiday_date" not in h:
+            h["holiday_date"] = h.pop("date")
+        _parse_date_fields(h, ["holiday_date"])
         h["holiday_list_id"] = obj.id
         db.add(Holiday(**{**h, "tenant_id": tenant_id, "created_by": user.id, "updated_by": user.id}))
     await db.flush()
@@ -511,6 +669,9 @@ async def update_holiday_list(
             Holiday.__table__.delete().where(Holiday.holiday_list_id == id)
         )
         for h in holidays:
+            if "date" in h and "holiday_date" not in h:
+                h["holiday_date"] = h.pop("date")
+            _parse_date_fields(h, ["holiday_date"])
             h["holiday_list_id"] = id
             db.add(Holiday(**{**h, "tenant_id": tenant_id, "created_by": user.id, "updated_by": user.id}))
         await db.flush()
@@ -721,7 +882,9 @@ async def list_performance_reviews(
         search=search, search_fields=["review_period", "comments"],
         filters=filters or None,
     )
-    return _list_response([_row_to_dict(i) for i in items], total, page, per_page)
+    rows = [_row_to_dict(i) for i in items]
+    await _enrich_with_employee(db, rows)
+    return _list_response(rows, total, page, per_page)
 
 
 @router.get("/performance-reviews/{id}")
@@ -806,7 +969,9 @@ async def list_expense_claims(
         search=search, search_fields=["claim_number", "title", "description"],
         filters=filters or None,
     )
-    return _list_response([_row_to_dict(i) for i in items], total, page, per_page)
+    rows = [_row_to_dict(i) for i in items]
+    await _enrich_with_employee(db, rows)
+    return _list_response(rows, total, page, per_page)
 
 
 @router.get("/expense-claims/{id}")
