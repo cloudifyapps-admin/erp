@@ -270,7 +270,7 @@ export function TaskDetailPanel({ task, open, onClose, projectId, onUpdate, show
     if (!title.trim()) { toast.error('Title is required'); return }
     setSaving(true)
     try {
-      await api.patch(`/projects/${resolvedProjectId}/tasks/${task.id}`, {
+      await api.put(`/projects/${resolvedProjectId}/tasks/${task.id}`, {
         title, description: description || null, status, priority,
         due_date: dueDate || null,
         estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null,

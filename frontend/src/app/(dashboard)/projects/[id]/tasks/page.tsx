@@ -123,7 +123,7 @@ export default function ProjectTasksPage() {
   const fetchMembers = useCallback(async () => {
     try {
       const { data } = await api.get(`/projects/${projectId}/members`, { params: { page_size: 100 } })
-      const items = Array.isArray(data) ? data : (data.items || data.results || [])
+      const items = Array.isArray(data) ? data : (data.data || data.items || data.results || [])
       setMembers(items)
     } catch { /* optional */ }
   }, [projectId])

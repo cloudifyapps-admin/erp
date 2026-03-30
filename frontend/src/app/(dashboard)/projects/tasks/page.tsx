@@ -133,7 +133,7 @@ export default function TasksPage() {
     const fetchPanelMembers = async () => {
       try {
         const { data } = await api.get(`/projects/${selectedTask.project_id}/members`, { params: { page_size: 100 } })
-        const items = Array.isArray(data) ? data : (data.items || data.results || [])
+        const items = Array.isArray(data) ? data : (data.data || data.items || data.results || [])
         if (!cancelled) setPanelMembers(items)
       } catch { if (!cancelled) setPanelMembers([]) }
     }
